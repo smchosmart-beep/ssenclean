@@ -1,5 +1,7 @@
 # 쎈클린 (SEN Clean) 1.0
 
+**[⬇ 설치파일 내려받기 (SenClean_Setup_1.0.0.exe, Windows 10·11 64비트)](https://github.com/smchosmart-beep/ssenclean/raw/downloads/SenClean_Setup_1.0.0.exe)**
+
 교사 PC의 개인정보 파일·폰트·PC암호·화면보호기·업데이트·바탕화면·브라우저 광고를 **한 화면에서 확인하고 버튼 하나로 해결**하는 Windows 설치형 도구입니다. 쎈(SEN) 제품군 4번째 프로그램입니다.
 
 - 회원가입·광고·결제 없음
