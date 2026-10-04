@@ -174,3 +174,23 @@ textarea.field { height: auto; min-height: 96px; padding: 10px 12px; resize: ver
 .search { max-width: 260px; }
 .chk-line { display: flex; gap: 18px; flex-wrap: wrap; font-size: 16px; }
 .chk-line .okmark { color: var(--ok); } .chk-line .badmark { color: var(--danger); }
+
+/* C드라이브 정리 */
+.disk { display: flex; flex-direction: column; gap: 8px; }
+.disk-bar { height: 16px; background: #E9E6DF; border-radius: 999px; overflow: hidden; }
+.disk-bar > i { display: block; height: 100%; background: var(--tc); border-radius: 999px; }
+.disk.small-disk .disk-bar { height: 10px; }
+.disk-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.disk-line strong { font: 700 17px var(--ui); color: var(--ink-strong); }
+.disk-line .free { margin-left: auto; font-size: 16px; color: var(--ink-strong); }
+.why { margin-top: 16px; }
+.why ul { margin: 6px 0 0 18px; padding: 0; }
+.why li { margin: 2px 0; }
+.cd-list .item .size { font: 700 17px var(--ui); color: var(--ink-strong); min-width: 76px; text-align: right; flex: none; }
+.cd-list .item .kind-ic { width: 34px; height: 34px; border-radius: var(--r-md); display: grid; place-items: center; flex: none; background: var(--canvas); }
+.cd-list .item .kind-ic svg { width: 18px; height: 18px; fill: none; stroke: var(--brand); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cd-list .item .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cd-list .item .tx span { color: var(--ink-mute); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.footer-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--hairline); }
+.footer-bar.sticky { position: sticky; bottom: 0; background: #fff; border-radius: 0 0 var(--r-lg, 12px) var(--r-lg, 12px); box-shadow: 0 -6px 12px -8px rgba(0,0,0,.12); z-index: 2; }
+.sum { font-size: 16px; color: var(--ink-strong); }

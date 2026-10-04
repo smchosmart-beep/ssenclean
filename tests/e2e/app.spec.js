@@ -34,7 +34,7 @@ const mockLog = () => app.evaluate(() => global.__sen.platform._log());
 test('대시보드: 문제 순서대로 카드가 채워진다', async () => {
   await expect(win.getByTestId('dash-hero')).toContainText('해결할 일이', { timeout: 20000 });
   const rows = win.getByTestId('dash-rows').locator('.row:not(.skeleton)');
-  await expect(rows).toHaveCount(8, { timeout: 20000 });
+  await expect(rows).toHaveCount(9, { timeout: 20000 });
   await expect(rows.nth(0)).toHaveClass(/tone-danger/);
   await expect(win.getByTestId('dash-password')).toContainText('PC암호가 없어요');
   await expect(win.getByTestId('nav-password').locator('.dot')).toHaveClass(/danger/);
@@ -125,10 +125,47 @@ test('업데이트: 크롬을 쎈클린 안에서 업데이트 → 다시 켜기
   await expect.poll(async () => (await mockLog()).some((l) => l.op === 'openPath' && /HncUpdater\.exe$/.test(l.path))).toBeTruthy();
 });
 
-test('프로그램 제거: 제어판 창 열기', async () => {
-  await win.getByTestId('nav-uninstall').click();
+test('C드라이브 정리: 찾기 → D드라이브로 옮기기 → 되돌리기 → 지우기 → 휴지통 비우기', async () => {
+  await win.getByTestId('nav-cdrive').click();
+  await expect(win.getByTestId('cdrive-hero')).toContainText('꽉 찼어요');
+  await expect(win.getByTestId('disk-D')).toContainText('D드라이브');
+  await shot('12-cdrive-top');
   await win.getByTestId('open-appwiz').click();
   await expect.poll(async () => (await mockLog()).some((l) => l.op === 'launch' && (l.args || [])[0] === 'appwiz.cpl')).toBeTruthy();
+  await win.getByTestId('cdrive-scan').click();
+  const items = win.getByTestId('cd-item');
+  await expect(items).toHaveCount(8, { timeout: 30000 });
+  await expect(items.first()).toContainText('Windows10_22H2.iso');
+
+  // 동영상만 골라 D드라이브로
+  await win.getByTestId('cd-tab-video').click();
+  await expect(items).toHaveCount(4);
+  await items.filter({ hasText: '운동회 전체 촬영.mp4' }).locator('input[type=checkbox]').check();
+  await shot('12-cdrive-results');
+  await win.getByTestId('cd-move').click();
+  await win.getByTestId('confirm-ok').click();
+  await expect(win.getByTestId('cdrive-last')).toContainText('D드라이브로 1개', { timeout: 20000 });
+  const moved = path.join(root, '_D', 'C드라이브에서 옮긴 파일', '내 동영상', '운동회 전체 촬영.mp4');
+  expect(fs.existsSync(moved)).toBeTruthy();
+  expect(fs.existsSync(path.join(root, 'Users', 'teacher', 'Videos', '운동회 전체 촬영.mp4.lnk'))).toBeTruthy();
+  await shot('13-cdrive-moved');
+  await win.getByTestId('cdrive-undo').click();
+  await expect(win.getByTestId('cdrive-last')).toHaveCount(0);
+  expect(fs.existsSync(path.join(root, 'Users', 'teacher', 'Videos', '운동회 전체 촬영.mp4'))).toBeTruthy();
+
+  // 설치파일 지우기 → 휴지통 비우기
+  await win.getByTestId('cdrive-scan').click();
+  await win.getByTestId('cd-tab-installer').click();
+  await expect(items).toHaveCount(4, { timeout: 30000 });
+  await win.getByTestId('cd-select-all').check();
+  await win.getByTestId('cd-delete').click();
+  await win.getByTestId('confirm-ok').click();
+  await expect(win.getByTestId('recycle-panel')).toContainText('휴지통', { timeout: 10000 });
+  await expect(win.getByTestId('empty-recycle')).toBeEnabled();
+  await win.getByTestId('empty-recycle').click();
+  await win.getByTestId('confirm-ok').click();
+  await expect(win.getByTestId('recycle-panel')).toContainText('비어 있어요');
+  await expect(win.getByTestId('cdrive-hero')).not.toContainText('남은 공간 9.0GB'); // 비운 만큼 늘어남
 });
 
 test('바탕화면 정리: 미리보기 → 정리 → 되돌리기', async () => {
@@ -226,7 +263,7 @@ test('설정 화면과 콘솔 오류 없음', async () => {
   await win.getByTestId('open-settings').click();
   await expect(win.locator('.page-title')).toHaveText('설정');
   await win.getByTestId('nav-dashboard').click();
-  await expect(win.getByTestId('dash-rows').locator('.row:not(.skeleton)')).toHaveCount(8, { timeout: 20000 });
+  await expect(win.getByTestId('dash-rows').locator('.row:not(.skeleton)')).toHaveCount(9, { timeout: 20000 });
   await shot('08-dashboard-after');
   expect(errors).toEqual([]);
 });

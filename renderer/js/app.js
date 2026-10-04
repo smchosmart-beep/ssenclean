@@ -5,7 +5,7 @@ import fonts from './views/fonts.js';
 import password from './views/password.js';
 import screensaver from './views/screensaver.js';
 import updates from './views/updates.js';
-import uninstall from './views/uninstall.js';
+import cdrive from './views/cdrive.js';
 import desktop from './views/desktop.js';
 import browser from './views/browser.js';
 import settings from './views/settings.js';
@@ -18,12 +18,12 @@ const MENUS = [
   { id: 'password', label: 'PC암호', icon: 'lock', view: password },
   { id: 'screensaver', label: '화면보호기', icon: 'monitor', view: screensaver },
   { id: 'updates', label: '업데이트', icon: 'up', view: updates },
-  { id: 'uninstall', label: '프로그램 제거', icon: 'trash', view: uninstall },
+  { id: 'cdrive', label: 'C드라이브 정리', icon: 'disk', view: cdrive },
   { id: 'desktop', label: '바탕화면 정리', icon: 'folder', view: desktop },
   { id: 'browser', label: '브라우저 청소', icon: 'globe', view: browser },
   { id: 'network', label: 'IP 주소', icon: 'network', view: network },
 ];
-const HIDDEN = { settings: { id: 'settings', view: settings } };
+const HIDDEN = { settings: { id: 'settings', view: settings }, uninstall: { id: 'cdrive', view: cdrive } };
 
 const dots = {};
 let current = null;

@@ -32,6 +32,7 @@ function createWin32Platform({ electron }) {
     programFiles: env.ProgramFiles || 'C:\\Program Files',
     programFilesX86: env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)',
     windir: env.WINDIR || 'C:\\Windows',
+    systemDrive: (env.SystemDrive || 'C:') + '\\',
     browserData: {
       chrome: path.join(localAppData, 'Google', 'Chrome', 'User Data'),
       edge: path.join(localAppData, 'Microsoft', 'Edge', 'User Data'),
@@ -164,6 +165,8 @@ ConvertTo-Json -InputObject @($r) -Depth 5 -Compress`, { timeoutMs: 45000 });
     screensaver: { apply: (o) => native.applyScreenSaver(o) },
     fonts: { add: native.addFont, remove: native.removeFont, broadcast: native.broadcastFontChange },
     fileAttributes: (p) => native.fileAttributes(p),
+    disks: () => native.disks(),
+    recycleBin: { query: (root) => native.recycleBinQuery(root), empty: (root) => native.recycleBinEmpty(root) },
     shell: {
       trash: (p) => shell.trashItem(p),
       reveal: (p) => shell.showItemInFolder(p),

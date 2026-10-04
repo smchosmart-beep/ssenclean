@@ -1,6 +1,6 @@
 # 쎈클린 (SEN Clean) 1.0
 
-**[⬇ 설치파일 내려받기 (SenClean_Setup_1.1.0.exe, Windows 10·11 64비트)](https://github.com/smchosmart-beep/ssenclean/raw/downloads/SenClean_Setup_1.1.0.exe)**
+**[⬇ 설치파일 내려받기 (SenClean_Setup_1.2.0.exe, Windows 10·11 64비트)](https://github.com/smchosmart-beep/ssenclean/raw/downloads/SenClean_Setup_1.2.0.exe)**
 
 교사 PC의 개인정보 파일·폰트·PC암호·화면보호기·업데이트·바탕화면·브라우저 광고를 **한 화면에서 확인하고 버튼 하나로 해결**하는 Windows 설치형 도구입니다. 쎈(SEN) 제품군 4번째 프로그램입니다.
 
@@ -50,7 +50,7 @@ npm run dist
 
 `dist` 폴더에 두 파일이 생깁니다.
 
-- `SenClean_Setup_1.1.0.exe` — 설치파일. **사용자별 설치**(`%LOCALAPPDATA%\Programs\쎈클린`)라서 관리자 권한(UAC 창) 없이 설치됩니다.
+- `SenClean_Setup_1.2.0.exe` — 설치파일. **사용자별 설치**(`%LOCALAPPDATA%\Programs\쎈클린`)라서 관리자 권한(UAC 창) 없이 설치됩니다.
 - `SenClean_1.0.2_portable.zip` — 무설치 버전
 
 > 리눅스·맥에서는 설치파일(NSIS)을 만들려면 Wine이 필요합니다. Windows에서 만드는 것을 권장합니다.
@@ -64,7 +64,7 @@ sen-clean/
 │  ├─ platform/       win32.js·native.js(Windows API, koffi) / mock.js·mock-seed.js(가짜 PC)
 │  ├─ privacy/        detectors(탐지 규칙) · parsers(문서 텍스트 추출) · scan-core · scan-worker(별도 프로세스) · service
 │  ├─ fonts/          fontinfo(폰트 이름표 읽기) · classify(안심/주의/확인 필요) · service
-│  ├─ password.js  screensaver.js  updates.js  uninstall.js  desktop.js  browser.js  dashboard.js  store.js
+│  ├─ password.js  screensaver.js  updates.js  uninstall.js  cdrive.js  desktop.js  browser.js  dashboard.js  store.js
 ├─ renderer/          index.html · styles/app.css(디자인 토큰) · js/(화면)
 ├─ data/              font-db.json(폰트 분류 DB) · adware-db.json(광고 프로그램 DB)
 ├─ assets/            fonts(Cafe24 PRO Slim Air·Bold, 학교안심 자연) · logo.svg · icon
@@ -81,7 +81,7 @@ sen-clean/
 리눅스 개발 환경에서는 Windows API를 직접 실행할 수 없어서, 아래 항목은 **실제 학교 PC에서 확인**해야 합니다. 각 항목이 실패해도 프로그램은 멈추지 않고 "확인할 수 없어요"나 안내 문구로 대체되도록 만들어 두었습니다.
 
 ### 설치
-- [ ] `SenClean_Setup_1.1.0.exe`가 UAC 창 없이 설치되는지
+- [ ] `SenClean_Setup_1.2.0.exe`가 UAC 창 없이 설치되는지
 - [ ] SmartScreen 경고가 뜨는지 (뜨면 "추가 정보 → 실행" 안내 필요, 코드 서명 검토)
 - [ ] 교육청 백신이 쎈클린을 차단하지 않는지 (레지스트리·예약 작업을 다루므로 오탐 가능)
 
@@ -114,6 +114,15 @@ sen-clean/
 - [x] 한컴 업데이트 프로그램: `Hnc\Office 2022\HncUtils\Service\HncUpdater.exe`, 관리자 권한 없이 실행됨 — 학교 PC 확인
 - [ ] 한글 버전이 Hwp.exe 실제 버전으로 나오는지
 - [ ] 학교 오피스가 Click-to-Run인지, [업데이트]가 오피스 업데이트 창을 여는지
+
+### C드라이브 정리
+- [ ] C드라이브·D드라이브 전체/남은 용량이 `내 PC`에 보이는 값과 같은지 (USB를 꽂으면 옮길 곳에 나오는지)
+- [ ] 큰 동영상·설치파일 찾기가 C:\ 전체에서 몇 분 안에 끝나는지, 접근 권한 없는 폴더에서 멈추지 않는지
+- [ ] D드라이브로 옮기기 진행률이 나오고, 원래 자리 바로가기(.lnk)로 영상이 열리는지
+- [ ] 재생 중인 동영상을 옮기려 하면 "열려 있어서 못 옮겼어요"가 나오고 원본이 그대로인지
+- [ ] [되돌리기]로 C드라이브 원래 자리에 돌아오고 바로가기가 사라지는지
+- [ ] 휴지통 크기가 맞게 나오고 [휴지통 비우기] 후 C드라이브 남은 공간이 늘어나는지 (관리자 창 없이)
+- [ ] 아주 큰 파일(수 GB)을 지울 때 "휴지통에 넣기에 너무 커요" 창이 뜨는지
 
 ### 바탕화면 정리
 - [ ] 정리·되돌리기 후 바탕화면 아이콘 배치가 크게 어긋나지 않는지
@@ -154,6 +163,13 @@ sen-clean/
 - **문서 검사는 별도 프로세스**(Electron utilityProcess)에서 돌아 큰 PDF를 읽어도 화면이 멈추지 않습니다. 패키징된 상태(ASAR)에서도 동작을 확인했습니다.
 
 ## 9. 바뀐 내용
+
+### 1.2.0
+- **'프로그램 제거' → 'C드라이브 정리'**
+  - C드라이브·D드라이브 사용량 막대와 "왜 C드라이브를 비워야 하나요?" 설명.
+  - C드라이브에서 큰 동영상(50MB↑)·설치파일(5MB↑)을 찾아 큰 순서로 보여 주고, 골라서 **D드라이브로 옮기기**(원래 자리에 바로가기 남김, 되돌리기 가능) 또는 **지우기**(휴지통).
+  - 휴지통 크기 표시와 [휴지통 비우기]. [프로그램 제거 창 열기]는 그대로.
+- **점검 현황**에 C드라이브 카드 추가 (남은 공간 10% 미만 빨강, 15% 미만 주황).
 
 ### 1.1.0
 - **IP 주소 메뉴 추가**

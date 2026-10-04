@@ -12,6 +12,7 @@ const { createDesktopService } = require('../core/desktop');
 const { createBrowserService } = require('../core/browser');
 const { createDashboard } = require('../core/dashboard');
 const { createNetworkService } = require('../core/network');
+const { createCdriveService } = require('../core/cdrive');
 
 const ROOT = path.join(__dirname, '..');
 
@@ -41,6 +42,7 @@ function createServices({ platform, spawnScan, emit }) {
     desktop: createDesktopService({ platform, store, scanPrivacy }),
     browser: createBrowserService({ platform, store, dataDir: path.join(ROOT, 'data') }),
     network: createNetworkService({ platform, store }),
+    cdrive: createCdriveService({ platform, store, emit }),
   };
   s.dashboard = createDashboard(s);
 
@@ -95,6 +97,17 @@ function createServices({ platform, spawnScan, emit }) {
     'updates:run': (id) => s.updates.run(id),
 
     'uninstall:open': () => s.uninstall.open(),
+    'cdrive:status': () => s.cdrive.status(),
+    'cdrive:scan': async () => (await s.cdrive.scan()).summary,
+    'cdrive:stop': () => s.cdrive.stop(),
+    'cdrive:results': () => s.cdrive.results(),
+    'cdrive:move': (o) => s.cdrive.move({ paths: o && o.paths, target: o && o.target, shortcut: !(o && o.shortcut === false) }),
+    'cdrive:remove': (o) => s.cdrive.remove({ paths: o && o.paths }),
+    'cdrive:emptyRecycle': () => s.cdrive.emptyRecycle(),
+    'cdrive:openRecycle': () => platform.launch('explorer.exe', ['shell:RecycleBinFolder']),
+    'cdrive:undo': (id) => s.cdrive.undo(id),
+    'cdrive:openFolder': (letter) => s.cdrive.openFolder(letter),
+    'cdrive:reveal': (p) => s.cdrive.reveal(p),
 
     'desktop:status': () => s.desktop.quickStatus(),
     'desktop:plan': (o) => s.desktop.plan(o || {}, (p) => emit('desktop:progress', p)),

@@ -31,6 +31,8 @@ function createMockPlatform({ root, seed = true } = {}) {
     programFilesX86: path.join(root, 'Program Files (x86)'),
     windir: path.join(root, 'Windows'),
     trash: path.join(root, '_Trash'),
+    systemDrive: root,
+    dDrive: path.join(root, '_D'),
     browserData: {
       chrome: path.join(localAppData, 'Google', 'Chrome', 'User Data'),
       edge: path.join(localAppData, 'Microsoft', 'Edge', 'User Data'),
@@ -115,6 +117,30 @@ function createMockPlatform({ root, seed = true } = {}) {
     },
   };
 
+  // 폴더 안 파일 크기 합(희소 파일은 논리 크기)
+  function dirBytes(dir, skip = []) {
+    let n = 0;
+    let ents; try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return 0; }
+    for (const e of ents) {
+      const p = path.join(dir, e.name);
+      if (skip.includes(p)) continue;
+      if (e.isDirectory()) n += dirBytes(p, skip);
+      else if (e.isFile()) { try { n += fs.statSync(p).size; } catch { /* gone */ } }
+    }
+    return n;
+  }
+  // C의 남은 공간 = 시작 값 - (지금 C 안 파일 크기 - 시작 때 크기). D도 같은 방식.
+  function disks() {
+    const d = state.disks || { C: { total: 238 * 1024 ** 3, free: 9 * 1024 ** 3 }, D: { total: 931 * 1024 ** 3, free: 612 * 1024 ** 3 } };
+    const cNow = dirBytes(root, [paths.dDrive, statePath]);
+    const dNow = dirBytes(paths.dDrive);
+    if (d.C.bytes0 == null) { d.C.bytes0 = cNow; d.D.bytes0 = dNow; state.disks = d; save(); }
+    return [
+      { letter: 'C', root: paths.systemDrive, total: d.C.total, free: Math.max(0, d.C.free - (cNow - d.C.bytes0)), removable: false, label: '' },
+      { letter: 'D', root: paths.dDrive, total: d.D.total, free: Math.max(0, d.D.free - (dNow - d.D.bytes0)), removable: false, label: 'DATA' },
+    ];
+  }
+
   function trash(p) {
     fs.mkdirSync(paths.trash, { recursive: true });
     if (state.lockedFiles.includes(p)) return Promise.reject(Object.assign(new Error('EBUSY'), { code: 'EBUSY' }));
@@ -137,6 +163,14 @@ function createMockPlatform({ root, seed = true } = {}) {
       add: (p) => { log({ op: 'addFont', path: p }); return true; },
       remove: (p) => { log({ op: 'removeFont', path: p }); return true; },
       broadcast: () => true,
+    },
+    disks,
+    recycleBin: {
+      query: () => {
+        let count = 0; try { count = fs.readdirSync(paths.trash).length; } catch { /* empty */ }
+        return { size: dirBytes(paths.trash), count };
+      },
+      empty: () => { fs.rmSync(paths.trash, { recursive: true, force: true }); log({ op: 'emptyTrash' }); return true; },
     },
     fileAttributes: (p) => {
       const base = path.basename(p);

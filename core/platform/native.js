@@ -12,6 +12,9 @@ function load() {
   const netapi = koffi.load('netapi32.dll');
   const user32 = koffi.load('user32.dll');
   const gdi32 = koffi.load('gdi32.dll');
+  const shell32 = koffi.load('shell32.dll');
+
+  const SHQUERYRBINFO = koffi.struct('SHQUERYRBINFO', { cbSize: 'uint32', i64Size: 'int64', i64NumItems: 'int64' });
 
   const USER_INFO_1 = koffi.struct('USER_INFO_1', {
     usri1_name: 'void *',
@@ -27,6 +30,7 @@ function load() {
   lib = {
     koffi,
     USER_INFO_1,
+    SHQUERYRBINFO,
     // registry
     RegOpenKeyExW: advapi.func('long __stdcall RegOpenKeyExW(intptr hKey, str16 lpSubKey, uint32 ulOptions, uint32 samDesired, _Out_ intptr *phkResult)'),
     RegCreateKeyExW: advapi.func('long __stdcall RegCreateKeyExW(intptr hKey, str16 lpSubKey, uint32 Reserved, str16 lpClass, uint32 dwOptions, uint32 samDesired, void *lpSecurityAttributes, _Out_ intptr *phkResult, _Out_ uint32 *lpdwDisposition)'),
@@ -49,6 +53,12 @@ function load() {
     SendMessageTimeoutW: user32.func('intptr __stdcall SendMessageTimeoutW(intptr hWnd, uint32 Msg, uintptr wParam, intptr lParam, uint32 fuFlags, uint32 uTimeout, _Out_ uintptr *lpdwResult)'),
     AddFontResourceW: gdi32.func('int __stdcall AddFontResourceW(str16 lpFileName)'),
     RemoveFontResourceW: gdi32.func('int __stdcall RemoveFontResourceW(str16 lpFileName)'),
+    // disks / recycle bin
+    GetDriveTypeW: kernel.func('uint32 __stdcall GetDriveTypeW(str16 lpRootPathName)'),
+    GetDiskFreeSpaceExW: kernel.func('int __stdcall GetDiskFreeSpaceExW(str16 lpDirectoryName, _Out_ uint64 *lpFreeBytesAvailable, _Out_ uint64 *lpTotalNumberOfBytes, _Out_ uint64 *lpTotalNumberOfFreeBytes)'),
+    GetVolumeInformationW: kernel.func('int __stdcall GetVolumeInformationW(str16 lpRootPathName, void *lpVolumeNameBuffer, uint32 nVolumeNameSize, void *lpSerial, void *lpMaxLen, void *lpFlags, void *lpFsName, uint32 nFsNameSize)'),
+    SHQueryRecycleBinW: shell32.func('int32 __stdcall SHQueryRecycleBinW(str16 pszRootPath, _Inout_ SHQUERYRBINFO *pSHQueryRBInfo)'),
+    SHEmptyRecycleBinW: shell32.func('int32 __stdcall SHEmptyRecycleBinW(intptr hwnd, str16 pszRootPath, uint32 dwFlags)'),
   };
   return lib;
 }
@@ -275,7 +285,49 @@ function fileAttributes(path) {
   } catch { return null; }
 }
 
+// ── Disks / Recycle bin ──────────────────────────────────
+// 드라이브 종류: 2 이동식(USB), 3 고정(하드디스크·SSD). 네트워크·CD는 빼고 돌려준다.
+function disks() {
+  const out = [];
+  let L;
+  try { L = load(); } catch { return out; }
+  for (const c of 'CDEFGHIJKLMNOPQRSTUVWXYZ') {
+    const root = `${c}:\\`;
+    try {
+      const type = L.GetDriveTypeW(root);
+      if (type !== 2 && type !== 3) continue;
+      const avail = [0], total = [0], free = [0];
+      if (!L.GetDiskFreeSpaceExW(root, avail, total, free)) continue;
+      let label = '';
+      try {
+        const buf = Buffer.alloc(261 * 2);
+        if (L.GetVolumeInformationW(root, buf, 261, null, null, null, null, 0)) label = buf.toString('utf16le').split('\0')[0];
+      } catch { /* no label */ }
+      out.push({ letter: c, root, total: Number(total[0]), free: Number(avail[0]), removable: type === 2, label });
+    } catch { /* skip */ }
+  }
+  return out;
+}
+
+function recycleBinQuery(root) {
+  try {
+    const L = load();
+    const info = { cbSize: L.koffi.sizeof(L.SHQUERYRBINFO), i64Size: 0, i64NumItems: 0 };
+    const hr = L.SHQueryRecycleBinW(root, info);
+    if (hr !== 0) return null;
+    return { size: Number(info.i64Size), count: Number(info.i64NumItems) };
+  } catch { return null; }
+}
+
+function recycleBinEmpty(root) {
+  try {
+    const hr = load().SHEmptyRecycleBinW(0, root, 0x1 | 0x2 | 0x4); // 확인창·진행창·소리 없음
+    return hr === 0 || hr === -2147418113 /* 비어 있을 때 E_UNEXPECTED */;
+  } catch { return false; }
+}
+
 module.exports = {
+  disks, recycleBinQuery, recycleBinEmpty,
   REG, FILE_ATTR,
   regRead, regValues, regSubkeys, regWrite, regDelete,
   hasPassword, passwordAgeSeconds, changePassword,

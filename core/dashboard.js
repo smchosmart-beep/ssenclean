@@ -1,6 +1,7 @@
 'use strict';
 // 대시보드 카드. 각 항목을 따로 점검해서 끝나는 대로 화면에 채운다. spec 3장
-const ITEMS = ['password', 'screensaver', 'browser', 'updates', 'fonts', 'privacy', 'network', 'desktop'];
+const ITEMS = ['password', 'screensaver', 'browser', 'cdrive', 'updates', 'fonts', 'privacy', 'network', 'desktop'];
+const gb = (n) => `${(n / 1024 ** 3).toFixed(n < 10 * 1024 ** 3 ? 1 : 0)}GB`;
 
 function fmtDate(t) { const d = new Date(t); return `${d.getMonth() + 1}월 ${d.getDate()}일`; }
 
@@ -76,6 +77,16 @@ function createDashboard(s) {
       const mode = i.primary.dhcp ? '자동 IP' : '고정 IP';
       if (!c.internet) return card('network', 'warn', `IP ${i.primary.ip} - 인터넷 연결이 안 돼요`, `${mode} · IP 설정을 정보부장에게 확인해 보세요.`, { ...go, label: 'IP 확인' });
       return card('network', 'info', `IP ${i.primary.ip}`, `${mode} · 인터넷 연결됨${i.room ? ` · ${i.room}` : ''}`, go);
+    },
+    async cdrive() {
+      const st = s.cdrive.status();
+      const d = st.system;
+      const go = { kind: 'navigate', target: 'cdrive', label: '정리하기', icon: 'disk' };
+      if (!d) return card('cdrive', 'unknown', 'C드라이브 - 확인할 수 없어요', '남은 공간을 읽지 못했어요.', go);
+      const left = `${gb(d.total)} 중 ${gb(d.free)} 남음 (${d.freePct}%)`;
+      if (d.level === 'danger') return card('cdrive', 'danger', `C드라이브가 거의 꽉 찼어요 (${gb(d.free)} 남음)`, '꽉 차면 PC가 느려져요. 큰 동영상·설치파일을 정리하세요.', go);
+      if (d.level === 'warn') return card('cdrive', 'warn', `C드라이브 남은 공간이 적어요 (${gb(d.free)} 남음)`, '더 차기 전에 큰 동영상·설치파일을 정리하세요.', go);
+      return card('cdrive', 'ok', 'C드라이브 - 공간이 넉넉해요', left, { ...go, label: '자세히', icon: 'search' });
     },
     async desktop() {
       const q = s.desktop.quickStatus();

@@ -16,6 +16,16 @@ function write(file, data, ageDays) {
   }
 }
 
+// 큰 파일은 내용 없이 크기만 잡는다(희소 파일). 실제 디스크는 거의 쓰지 않는다.
+function big(file, bytes, ageDays) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const fd = fs.openSync(file, 'w');
+  fs.ftruncateSync(fd, bytes);
+  fs.closeSync(fd);
+  if (ageDays != null) { const t = new Date(Date.now() - ageDays * DAY); fs.utimesSync(file, t, t); }
+}
+const GB = 1024 ** 3, MB = 1024 ** 2;
+
 function seedMock(root, P) {
   fs.mkdirSync(root, { recursive: true });
   const N = (n, rrn, phone) => [n, rrn, phone];
@@ -121,8 +131,23 @@ function seedMock(root, P) {
   write(path.join(eprof, 'History'), Buffer.alloc(120000, 1));
   write(path.join(eprof, 'Cache', 'Cache_Data', 'data_1'), Buffer.alloc(600000, 2));
 
+  // ── C드라이브의 큰 파일 ──
+  big(path.join(P.home, 'Videos', '운동회 전체 촬영.mp4'), Math.round(3.2 * GB), 330);
+  big(path.join(P.home, 'Videos', '2학기 공개수업.mp4'), Math.round(1.8 * GB), 40);
+  big(path.join(P.documents, '수업자료', '과학 실험 영상.mkv'), 420 * MB, 200);
+  big(path.join(P.documents, '수업자료', '동요 반주.mp4'), 30 * MB, 100); // 기준(50MB)보다 작음
+  big(path.join(P.downloads, 'Windows10_22H2.iso'), Math.round(5.1 * GB), 500);
+  big(path.join(P.downloads, '한컴오피스2022_설치.exe'), 950 * MB, 300);
+  big(path.join(P.downloads, 'ZoomInstallerFull.msi'), 85 * MB, 150);
+  big(path.join(P.downloads, '그림판도구.exe'), 40 * MB, 150); // 설치파일 이름이 아니지만 다운로드 폴더에 있음
+  big(path.join(root, '자료', '졸업식 2025.mov'), Math.round(2.4 * GB), 260);
+  big(path.join(P.localAppData, 'Temp', 'cache_video.mp4'), 600 * MB, 10); // AppData는 건드리지 않음
+  big(path.join(P.programFiles, 'Vendor', 'big_setup.exe'), 300 * MB, 10); // Program Files도 건드리지 않음
+  fs.mkdirSync(path.join(root, '_D'), { recursive: true });
+
   const HKCU = 'HKCU\\Software';
   const state = {
+    disks: { C: { total: 238 * GB, free: 9 * GB }, D: { total: 931 * GB, free: 612 * GB } },
     account: { type: 'local', password: '', passwordSetAt: null, minLength: 4 },
     processes: ['explorer.exe', 'chrome.exe'],
     lockedFiles: [],
