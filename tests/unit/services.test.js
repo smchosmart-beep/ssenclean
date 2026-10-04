@@ -269,7 +269,13 @@ test('업데이트: 한글은 실제 업데이트 프로그램 경로와 Hwp.exe
   assert.strictEqual(hg.hasUpdater, true);
   const r = await svc.run('hangul');
   assert.ok(r.ok);
-  assert.ok(env.platform._log().some((l) => l.op === 'launch' && /Office 2022[\\/]HncUtils[\\/]Service[\\/]HncUpdater\.exe$/.test(l.file)));
+  assert.ok(env.platform._log().some((l) => l.op === 'openPath' && /Office 2022[\\/]HncUtils[\\/]Service[\\/]HncUpdater\.exe$/.test(l.path)), '더블클릭 방식으로 실행');
+  // 실행했는데 프로세스가 뜨지 않으면 '열었어요' 대신 방법 안내
+  env.platform._state().openFails = ['hncupdater.exe'];
+  env.platform._state().processes = env.platform._state().processes.filter((p) => p.toLowerCase() !== 'hncupdater.exe');
+  const fail = await svc.run('hangul');
+  assert.strictEqual(fail.ok, false);
+  assert.ok(fail.howto);
   fs.unlinkSync(path.join(env.platform.paths.programFilesX86, 'Hnc', 'Office 2022', 'HncUtils', 'Service', 'HncUpdater.exe'));
   const hg2 = (await svc.check()).find((u) => u.id === 'hangul');
   assert.strictEqual(hg2.hasUpdater, false);

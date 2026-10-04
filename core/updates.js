@@ -229,8 +229,17 @@ function createUpdateService({ platform, emit = () => {} }) {
       case 'hangul': {
         const u = hancomUpdater();
         if (!u) return { ok: false, howto: true };
-        platform.launch(u, []);
-        return { ok: true, guide: '한컴오피스 업데이트 창이 열렸어요. 관리자 암호를 물으면 정보 담당 선생님께 요청하세요.' };
+        // 더블클릭(Win+R)과 같은 방식으로 실행한다. 학교 PC 실기: 일반 실행으로는 창이 뜨지 않음.
+        const image = path.basename(u).toLowerCase();
+        const err = await platform.shell.openPath(u);
+        if (err) return { ok: false, howto: true };
+        for (let i = 0; i < 12; i++) {
+          await new Promise((r) => setTimeout(r, 250));
+          if ((await platform.processes()).includes(image)) {
+            return { ok: true, guide: '한컴오피스 업데이트 창을 열었어요. 관리자 암호를 물으면 정보 담당 선생님께 요청하세요.' };
+          }
+        }
+        return { ok: false, howto: true };
       }
       default:
         return { ok: false };

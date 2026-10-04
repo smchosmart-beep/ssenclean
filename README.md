@@ -1,6 +1,6 @@
 # 쎈클린 (SEN Clean) 1.0
 
-**[⬇ 설치파일 내려받기 (SenClean_Setup_1.0.1.exe, Windows 10·11 64비트)](https://github.com/smchosmart-beep/ssenclean/raw/downloads/SenClean_Setup_1.0.1.exe)**
+**[⬇ 설치파일 내려받기 (SenClean_Setup_1.0.2.exe, Windows 10·11 64비트)](https://github.com/smchosmart-beep/ssenclean/raw/downloads/SenClean_Setup_1.0.2.exe)**
 
 교사 PC의 개인정보 파일·폰트·PC암호·화면보호기·업데이트·바탕화면·브라우저 광고를 **한 화면에서 확인하고 버튼 하나로 해결**하는 Windows 설치형 도구입니다. 쎈(SEN) 제품군 4번째 프로그램입니다.
 
@@ -50,8 +50,8 @@ npm run dist
 
 `dist` 폴더에 두 파일이 생깁니다.
 
-- `SenClean_Setup_1.0.1.exe` — 설치파일. **사용자별 설치**(`%LOCALAPPDATA%\Programs\쎈클린`)라서 관리자 권한(UAC 창) 없이 설치됩니다.
-- `SenClean_1.0.1_portable.zip` — 무설치 버전
+- `SenClean_Setup_1.0.2.exe` — 설치파일. **사용자별 설치**(`%LOCALAPPDATA%\Programs\쎈클린`)라서 관리자 권한(UAC 창) 없이 설치됩니다.
+- `SenClean_1.0.2_portable.zip` — 무설치 버전
 
 > 리눅스·맥에서는 설치파일(NSIS)을 만들려면 Wine이 필요합니다. Windows에서 만드는 것을 권장합니다.
 
@@ -81,7 +81,7 @@ sen-clean/
 리눅스 개발 환경에서는 Windows API를 직접 실행할 수 없어서, 아래 항목은 **실제 학교 PC에서 확인**해야 합니다. 각 항목이 실패해도 프로그램은 멈추지 않고 "확인할 수 없어요"나 안내 문구로 대체되도록 만들어 두었습니다.
 
 ### 설치
-- [ ] `SenClean_Setup_1.0.1.exe`가 UAC 창 없이 설치되는지
+- [ ] `SenClean_Setup_1.0.2.exe`가 UAC 창 없이 설치되는지
 - [ ] SmartScreen 경고가 뜨는지 (뜨면 "추가 정보 → 실행" 안내 필요, 코드 서명 검토)
 - [ ] 교육청 백신이 쎈클린을 차단하지 않는지 (레지스트리·예약 작업을 다루므로 오탐 가능)
 
@@ -146,6 +146,9 @@ sen-clean/
 - **문서 검사는 별도 프로세스**(Electron utilityProcess)에서 돌아 큰 PDF를 읽어도 화면이 멈추지 않습니다. 패키징된 상태(ASAR)에서도 동작을 확인했습니다.
 
 ## 9. 바뀐 내용
+
+### 1.0.2
+- **한글 [업데이트 확인]**: 창이 열리지 않는데 "열었어요"만 나오던 문제를 고쳤습니다. 한컴 업데이트 프로그램을 더블클릭과 같은 방식으로 실행하고, 실제로 실행됐는지 확인한 뒤에만 "열었어요"를 보여 줍니다. 실행되지 않으면 [업데이트 방법] 안내를 띄웁니다.
 
 ### 1.0.1
 - **크롬 업데이트 판정**: 구글 서버의 최신 번호 대신 이 PC의 구글 업데이트에 직접 물어봅니다. 순차 배포 중인 버전 때문에 크롬은 "최신"인데 쎈클린만 "업데이트 있음"으로 나오던 문제를 고쳤습니다.

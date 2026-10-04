@@ -121,7 +121,8 @@ test('업데이트: 크롬을 쎈클린 안에서 업데이트 → 다시 켜기
   expect(log.some((l) => l.op === 'launch' && (l.args || []).includes('--restore-last-session'))).toBeTruthy();
   await expect(win.getByTestId('upd-row-hangul')).toContainText('12.0.0.3650');
   await win.getByTestId('upd-hangul').click();
-  await expect.poll(async () => (await mockLog()).some((l) => l.op === 'launch' && /HncUpdater\.exe$/.test(l.file))).toBeTruthy();
+  await expect(win.locator('.toast').last()).toContainText('업데이트 창을 열었어요', { timeout: 10000 });
+  await expect.poll(async () => (await mockLog()).some((l) => l.op === 'openPath' && /HncUpdater\.exe$/.test(l.path))).toBeTruthy();
 });
 
 test('프로그램 제거: 제어판 창 열기', async () => {

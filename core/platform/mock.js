@@ -148,7 +148,14 @@ function createMockPlatform({ root, seed = true } = {}) {
     shell: {
       trash,
       reveal: (p) => log({ op: 'reveal', path: p }),
-      openPath: (p) => { log({ op: 'openPath', path: p }); return Promise.resolve(''); },
+      openPath: (p) => {
+        log({ op: 'openPath', path: p });
+        // 실행 파일을 열면 프로세스 목록에 나타난다(실패 흉내: state.openFails).
+        if (/\.exe$/i.test(p) && !(state.openFails || []).includes(path.basename(p).toLowerCase())) {
+          state.processes.push(path.basename(p)); save();
+        }
+        return Promise.resolve('');
+      },
       openExternal: (u) => { log({ op: 'openExternal', url: u }); return Promise.resolve(); },
       readShortcut: (p) => {
         try { const j = JSON.parse(fs.readFileSync(p, 'utf8')); return { target: j.target || '', args: j.args || '', cwd: j.cwd || '', icon: j.icon || '', iconIndex: 0, description: '' }; } catch { return null; }
