@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' senfont:; img-src 'self' data:; connect-src 'none'; object-src 'none'">
+  <title>쎈클린</title>
+  <link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+  <header class="app-header">
+    <img class="logo" src="../assets/logo.svg" alt="쎈클린">
+    <span class="ver" id="ver"></span>
+    <span class="mock-badge" id="mock-badge" hidden>연습용 가짜 PC</span>
+    <span class="sp"></span>
+    <div class="header-actions" id="header-actions"></div>
+  </header>
+  <div class="wrap">
+    <nav class="side" id="nav" aria-label="메뉴"></nav>
+    <main id="view" tabindex="-1"></main>
+  </div>
+  <div id="toasts" aria-live="polite"></div>
+  <div id="modal-root"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

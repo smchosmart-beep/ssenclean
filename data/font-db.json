@@ -1,0 +1,50 @@
+{
+  "_note": "쎈클린 폰트 분류 DB. 1.0 초기값이며 실기 검증(spec 14-11) 후 보완한다. 이름은 대소문자·공백을 무시하고 비교한다.",
+  "version": "2026.10.04",
+  "allowGroups": [
+    {
+      "label": "Windows 기본 글꼴",
+      "families": ["맑은 고딕", "Malgun Gothic", "Malgun Gothic Semilight", "굴림", "Gulim", "굴림체", "GulimChe", "돋움", "Dotum", "돋움체", "DotumChe", "바탕", "Batang", "바탕체", "BatangChe", "궁서", "Gungsuh", "궁서체", "GungsuhChe",
+        "Arial", "Arial Black", "Bahnschrift", "Calibri", "Cambria", "Cambria Math", "Candara", "Cascadia Code", "Cascadia Mono", "Comic Sans MS", "Consolas", "Constantia", "Corbel", "Courier New", "Ebrima", "Franklin Gothic Medium", "Gabriola", "Gadugi", "Georgia", "HoloLens MDL2 Assets", "Impact", "Ink Free", "Javanese Text", "Lucida Console", "Lucida Sans Unicode", "Marlett", "Mongolian Baiti", "MV Boli", "Myanmar Text", "Palatino Linotype", "SimSun", "NSimSun", "SimSun-ExtB", "MingLiU-ExtB", "PMingLiU-ExtB", "Sylfaen", "Symbol", "Tahoma", "Times New Roman", "Trebuchet MS", "Verdana", "Webdings", "Wingdings", "MS Gothic", "MS PGothic", "MS UI Gothic", "Modern", "Roman", "Script", "Courier", "MS Sans Serif", "MS Serif", "Small Fonts", "System", "Terminal", "Fixedsys"],
+      "patterns": ["^segoe", "^sitka", "^microsoft ", "^yu ", "^leelawadee", "^nirmala", "^dengxian", "^fangsong", "^kaiti", "^simhei", "^simkai"]
+    },
+    {
+      "label": "한컴오피스 글꼴",
+      "families": ["함초롬바탕", "함초롬돋움", "HCR Batang", "HCR Dotum"],
+      "patterns": ["^hy", "^한컴", "^함초롬", "^hcr ", "^hancom", "^haansoft", "^휴먼", "^human", "^양재", "^yangjae", "^신명", "^shinmyung", "^한양", "^md", "^태 ", "^문체부", "^hci "]
+    },
+    {
+      "label": "MS 오피스 글꼴",
+      "families": ["Agency FB", "Algerian", "Aptos", "Aptos Display", "Aptos Narrow", "Aptos Serif", "Aptos Mono", "Bauhaus 93", "Bell MT", "Berlin Sans FB", "Berlin Sans FB Demi", "Bernard MT Condensed", "Bierstadt", "Blackadder ITC", "Bodoni MT", "Book Antiqua", "Bookman Old Style", "Bradley Hand ITC", "Britannic Bold", "Broadway", "Brush Script MT", "Californian FB", "Calisto MT", "Castellar", "Centaur", "Century", "Century Gothic", "Century Schoolbook", "Chiller", "Colonna MT", "Cooper Black", "Copperplate Gothic Bold", "Copperplate Gothic Light", "Curlz MT", "Dubai", "Edwardian Script ITC", "Elephant", "Engravers MT", "Felix Titling", "Footlight MT Light", "Forte", "Freestyle Script", "French Script MT", "Garamond", "Gigi", "Gloucester MT Extra Condensed", "Grandview", "Haettenschweiler", "Harlow Solid Italic", "Harrington", "High Tower Text", "Imprint MT Shadow", "Informal Roman", "Jokerman", "Juice ITC", "Kristen ITC", "Kunstler Script", "Magneto", "Maiandra GD", "Matura MT Script Capitals", "Mistral", "Modern No. 20", "Monotype Corsiva", "Niagara Engraved", "Niagara Solid", "OCR A Extended", "Old English Text MT", "Onyx", "Palace Script MT", "Papyrus", "Parchment", "Perpetua", "Perpetua Titling MT", "Playbill", "Poor Richard", "Pristina", "Rage Italic", "Ravie", "Rockwell", "Rockwell Condensed", "Rockwell Extra Bold", "Script MT Bold", "Seaford", "Showcard Gothic", "Skeena", "Snap ITC", "Stencil", "Tempus Sans ITC", "Tenorite", "Tw Cen MT", "Tw Cen MT Condensed", "Viner Hand ITC", "Vivaldi", "Vladimir Script", "Wide Latin"],
+      "patterns": ["^eras ", "^franklin gothic", "^gill sans", "^goudy", "^lucida", "^bodoni"]
+    },
+    {
+      "label": "학교안심 글꼴",
+      "families": [],
+      "patterns": ["^학교안심", "^hakgyoansim"]
+    },
+    {
+      "label": "무료 공개 글꼴",
+      "families": ["Pretendard", "Spoqa Han Sans", "Spoqa Han Sans Neo"],
+      "patterns": ["^나눔", "^nanum", "^noto ", "^본고딕", "^본명조", "^source han", "^kopub", "^ibm plex", "^gmarket", "^cafe24", "^배달의민족", "^bm ", "^조선일보명조", "^마루 부리", "^maruburi", "^아리따", "^arita", "^제주", "^jeju", "^서울남산", "^서울한강", "^seoul", "^tmon", "^티몬", "^여기어때", "^넥슨", "^nexon", "^에스코어", "^s-core", "^kbiz", "^g마켓"]
+    }
+  ],
+  "openLicensePatterns": ["open font license", "\\bofl\\b", "scripts\\.sil\\.org/ofl", "apache license", "공공누리", "\\bkogl\\b", "ubuntu font licen", "public domain", "creative commons zero", "\\bcc0\\b"],
+  "cautionVendors": [
+    { "label": "산돌", "patterns": ["sandoll", "산돌"], "vendorIds": ["SAND"] },
+    { "label": "윤디자인", "patterns": ["yoon design", "yoondesign", "윤디자인", "yoon type"], "vendorIds": ["YOON"] },
+    { "label": "폰트릭스", "patterns": ["fontrix", "폰트릭스", "rix font", "릭스폰트"], "vendorIds": [] },
+    { "label": "아시아폰트", "patterns": ["asiafont", "asia font", "아시아폰트", "아시아소프트"], "vendorIds": [] },
+    { "label": "태시스템", "patterns": ["tae system", "태시스템", "taesystem"], "vendorIds": [] },
+    { "label": "직지소프트", "patterns": ["jikji", "직지소프트"], "vendorIds": [] },
+    { "label": "폰트뱅크", "patterns": ["fontbank", "폰트뱅크"], "vendorIds": [] },
+    { "label": "디자인210", "patterns": ["design210", "디자인210"], "vendorIds": [] },
+    { "label": "모노타입", "patterns": ["monotype", "linotype"], "vendorIds": ["MONO", "LINO"] },
+    { "label": "어도비", "patterns": ["adobe systems", "adobe inc"], "vendorIds": ["ADBE"] },
+    { "label": "해외 상용 폰트", "patterns": ["international typeface corporation", "bitstream", "\\burw\\b", "fontsmith", "hoefler", "commercial type", "typotheque", "font bureau"], "vendorIds": ["ITC ", "BITS"] }
+  ],
+  "schoolFonts": {
+    "patterns": ["^학교안심", "^hakgyoansim"],
+    "officialUrl": null
+  }
+}

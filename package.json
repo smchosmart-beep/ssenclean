@@ -1,0 +1,76 @@
+{
+  "name": "sen-clean",
+  "productName": "쎈클린",
+  "version": "1.0.0",
+  "description": "교사 PC 안심 점검 도구",
+  "main": "electron/main.js",
+  "type": "commonjs",
+  "author": "SEN Tools",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "start:mock": "cross-env SENCLEAN_MOCK=1 electron .",
+    "test": "node --test tests/unit/*.test.js",
+    "test:e2e": "playwright test",
+    "dist": "electron-builder --win nsis zip --x64"
+  },
+  "dependencies": {
+    "cfb": "1.2.2",
+    "fflate": "0.8.3",
+    "koffi": "2.16.3",
+    "pdfjs-dist": "6.4.299"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "cross-env": "7.0.3",
+    "electron": "41.10.7",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "kr.sen.tools.clean",
+    "productName": "쎈클린",
+    "asar": true,
+    "files": [
+      "electron/**",
+      "core/**",
+      "renderer/**",
+      "data/**",
+      "assets/**",
+      "package.json",
+      "!core/platform/mock-fonts/**",
+      "!node_modules/koffi/build/koffi/{darwin,linux,freebsd,openbsd,musl,android}*/**",
+      "!node_modules/koffi/build/koffi/win32_{ia32,arm64}/**",
+      "!node_modules/pdfjs-dist/{web,image_decoders,types}/**",
+      "!node_modules/pdfjs-dist/build/**",
+      "!node_modules/pdfjs-dist/legacy/web/**",
+      "!**/*.map",
+      "!node_modules/@napi-rs/**"
+    ],
+    "asarUnpack": [
+      "node_modules/koffi/**"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "icon": "assets/icon.ico",
+      "requestedExecutionLevel": "asInvoker",
+      "artifactName": "SenClean_${version}_portable.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "쎈클린",
+      "artifactName": "SenClean_Setup_${version}.exe"
+    },
+    "publish": null
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "_note": "쎈클린 광고 프로그램 DB. 1.0 초기값: 널리 알려진 브라우저 하이재커·애드웨어 계열과 의심 패턴만 담았다. 국내 광고 프로그램 목록은 실기 수집 후 보완한다(spec 14-10). 모든 비교는 대소문자 무시 부분 일치.",
+  "version": "2026.10.04",
+  "names": ["conduit", "babylon toolbar", "ask toolbar", "mywebsearch", "mindspark", "delta search", "delta toolbar", "sweet page", "sweetpacks", "snap.do", "search protect", "wajam", "opencandy", "crossrider", "superfish", "browsefox", "linkury", "smartbar", "mysearchdial", "qvo6", "v9 speedial", "istartsurf", "trovi", "searchmine", "safe finder", "hao123 toolbar", "coupon server", "price chopper", "shopper pro"],
+  "publishers": ["conduit ltd", "mindspark interactive", "spigot, inc", "visicom media", "superfish inc", "crossrider ltd"],
+  "domains": ["delta-search.com", "sweet-page.com", "snap.do", "trovi.com", "istartsurf.com", "mysearchdial.com", "qvo6.com", "v9.com", "searchmine.net", "search.conduit.com", "mywebsearch.com", "ask.com/toolbar"],
+  "trackingParams": ["src=adw", "subid=", "affid=", "aff_id=", "partner_id=", "lptag=", "utm_source=adware"],
+  "standardSearch": ["google.", "naver.com", "daum.net", "bing.com", "zum.com", "duckduckgo.com", "yahoo.", "nate.com", "ecosia.org"],
+  "legitBrowserDirs": [
+    "{ProgramFiles}\\Google\\Chrome\\Application",
+    "{ProgramFilesX86}\\Google\\Chrome\\Application",
+    "{LocalAppData}\\Google\\Chrome\\Application",
+    "{ProgramFiles}\\Microsoft\\Edge\\Application",
+    "{ProgramFilesX86}\\Microsoft\\Edge\\Application",
+    "{ProgramFiles}\\Naver\\Naver Whale\\Application",
+    "{ProgramFilesX86}\\Naver\\Naver Whale\\Application",
+    "{LocalAppData}\\Naver\\Naver Whale\\Application"
+  ],
+  "protect": ["nprotect", "inca internet", "ahnlab", "v3 ", "v3lite", "astx", "touchen", "raonsecure", "wizvera", "veraport", "magicline", "dreamsecurity", "anysign", "delfino", "xecure", "softforum", "ksign", "kica", "signkorea", "yessign", "crosscert", "crossweb", "ipinside", "interezen", "initech", "inisafe", "keysharp", "virobot", "hauri", "alyac", "estsoft", "windows defender", "microsoft", "google", "naver", "kakao", "hancom", "hnc", "zoom", "teams", "onedrive", "dropbox", "adobe", "nvidia", "intel", "amd", "realtek", "hp ", "hewlett", "canon", "epson", "brother", "samsung", "sindoh", "fuji", "xerox", "lexmark", "logitech", "dell", "lenovo", "asus", "lg electronics", "pc지키미", "내pc지키미", "pcmaster", "eduone", "edufine", "neis", "나이스", "에듀파인", "업무관리", "k-에듀파인", "jiransoft", "지란지교", "markany", "마크애니", "fasoo", "파수", "softcamp", "소프트캠프", "darkeyes", "netman", "nac", "genian", "지니언스"]
+}
