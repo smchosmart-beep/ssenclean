@@ -1,6 +1,7 @@
 'use strict';
 // 대시보드 카드. 각 항목을 따로 점검해서 끝나는 대로 화면에 채운다. spec 3장
-const ITEMS = ['password', 'screensaver', 'browser', 'cdrive', 'updates', 'fonts', 'privacy', 'network', 'desktop'];
+// 화면 순서 = 사이드바 메뉴 순서(고정)
+const ITEMS = ['privacy', 'fonts', 'password', 'screensaver', 'updates', 'cdrive', 'browser', 'desktop', 'network'];
 const gb = (n) => `${(n / 1024 ** 3).toFixed(n < 10 * 1024 ** 3 ? 1 : 0)}GB`;
 
 function fmtDate(t) { const d = new Date(t); return `${d.getMonth() + 1}월 ${d.getDate()}일`; }
@@ -12,7 +13,6 @@ function createDashboard(s) {
     async password() {
       const st = await s.password.status({ refresh: true });
       const go = (label) => ({ kind: 'navigate', target: 'password', label, icon: 'lock' });
-      if (st.accountType === 'domain') return card('password', 'info', 'PC암호 - 학교에서 관리하는 계정이에요', '암호는 정보 담당 선생님께 문의하세요.', null);
       if (st.hasPassword === false) return card('password', 'danger', 'PC암호가 없어요', '자리를 비우면 누구나 이 PC를 열 수 있어요.', go('암호 만들기'));
       if (st.dday != null) {
         const due = `변경 예정일 ${fmtDate(st.due)}`;
@@ -26,7 +26,6 @@ function createDashboard(s) {
     async screensaver() {
       const st = s.screensaver.status();
       if (st.safe) return card('screensaver', 'ok', `화면보호기 - ${st.minutes}분 후 잠겨요`, '자리를 비우면 화면이 잠겨요.', null);
-      if (st.managed) return card('screensaver', 'info', '화면보호기 - 학교에서 관리 중이에요', '설정은 정보 담당 선생님께 문의하세요.', { kind: 'navigate', target: 'screensaver', label: '자세히', icon: 'search' });
       const title = !st.active ? '화면보호기가 꺼져 있어요' : !st.secure ? '화면보호기를 풀 때 암호를 묻지 않아요' : `화면보호기가 ${st.minutes}분 뒤에야 켜져요`;
       return card('screensaver', 'danger', title, '자리를 비워도 화면이 그대로 보여요.', { kind: 'run', target: 'screensaver:secure', label: '안전하게 설정', icon: 'shield' });
     },
@@ -59,8 +58,8 @@ function createDashboard(s) {
     },
     async fonts() {
       const r = s.fonts.list();
-      if (r.summary.cautionRemovable > 0) return card('fonts', 'warn', `사용 주의 폰트 ${r.summary.cautionRemovable}개`, '학교에서 쓰려면 라이선스 확인이 필요한 폰트예요.', { kind: 'navigate', target: 'fonts', label: '정리하기', icon: 'font' });
-      return card('fonts', 'ok', '폰트 - 문제없어요', r.summary.caution ? `시스템 폰트 중 ${r.summary.caution}개는 정보 담당 선생님 확인이 필요해요.` : '사용 주의 폰트가 없어요.', { kind: 'navigate', target: 'fonts', label: '자세히', icon: 'search' });
+      if (r.summary.cautionRemovable > 0) return card('fonts', 'warn', `사용 주의 폰트 ${r.summary.cautionRemovable}개`, '학교에서 쓰면 저작권 문제가 될 수 있는 폰트예요.', { kind: 'navigate', target: 'fonts', label: '정리하기', icon: 'font' });
+      return card('fonts', 'ok', '폰트 - 문제없어요', '사용 주의 폰트가 없어요.', { kind: 'navigate', target: 'fonts', label: '자세히', icon: 'search' });
     },
     async privacy() {
       const last = s.privacy.lastSummary();

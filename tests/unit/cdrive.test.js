@@ -33,6 +33,7 @@ test('C드라이브 상태와 큰 파일 찾기', async () => {
     assert.strictEqual(results.find((r) => r.name === '과학 실험 영상.mkv').place, '문서 › 수업자료');
     assert.strictEqual(results.find((r) => r.name === 'ZoomInstallerFull.msi').kind, 'installer');
     assert.strictEqual(summary.count, results.length);
+    assert.strictEqual(results.find((r) => r.name === 'Windows10_22H2.iso').dup, undefined);
     assert.ok(env.events.some(([ch, p]) => ch === 'cdrive:event' && p.type === 'done'));
   } finally { env.cleanup(); }
 });
@@ -44,7 +45,7 @@ test('D드라이브로 옮기기 → 바로가기 → 되돌리기', async () =>
     const { results } = await s.scan();
     const pick = results.filter((r) => ['운동회 전체 촬영.mp4', '졸업식 2025.mov'].includes(r.name));
     const before = s.status();
-    const r = await s.move({ paths: pick.map((p) => p.path), target: 'D', shortcut: true });
+    const r = await s.move({ paths: pick.map((p) => p.path), target: 'D', desktopLink: true });
     assert.strictEqual(r.ok, true);
     assert.strictEqual(r.moved, 2);
     const d = env.platform.paths.dDrive;
@@ -52,7 +53,11 @@ test('D드라이브로 옮기기 → 바로가기 → 되돌리기', async () =>
     const dest2 = path.join(d, MOVE_ROOT, 'C드라이브', '자료', '졸업식 2025.mov');
     assert.ok(fs.existsSync(dest1) && fs.existsSync(dest2));
     assert.ok(!fs.existsSync(pick[0].path));
-    assert.ok(fs.existsSync(pick[0].path + '.lnk'));
+    assert.ok(!fs.existsSync(pick[0].path + '.lnk'), '파일별 바로가기는 만들지 않음');
+    const link = path.join(env.platform.paths.desktop, 'D드라이브로 옮긴 파일.lnk');
+    assert.ok(fs.existsSync(link), '바탕화면에 폴더 바로가기 1개');
+    assert.strictEqual(r.link, 'D드라이브로 옮긴 파일');
+    assert.strictEqual(s.status().prefs.target, 'D');
     const after = s.status();
     assert.ok(Math.abs((after.system.free - before.system.free) - r.bytes) < 64 * 1024); // 바로가기·기록 파일 몇 KB 차이
     assert.ok(after.last && after.last.moved === 2);
@@ -60,7 +65,9 @@ test('D드라이브로 옮기기 → 바로가기 → 되돌리기', async () =>
 
     const u = await s.undo(r.logId);
     assert.deepStrictEqual([u.ok, u.restored], [true, 2]);
-    assert.ok(fs.existsSync(pick[0].path) && !fs.existsSync(pick[0].path + '.lnk') && !fs.existsSync(dest1));
+    assert.ok(fs.existsSync(pick[0].path) && !fs.existsSync(dest1));
+    assert.ok(!fs.existsSync(link), '옮긴 파일이 다 돌아가면 바로가기도 지움');
+    assert.ok(!fs.existsSync(path.join(d, MOVE_ROOT)), '빈 폴더도 지움');
     assert.strictEqual(s.status().last, null);
   } finally { env.cleanup(); }
 });
@@ -78,7 +85,7 @@ test('다른 드라이브(복사)로 옮기기: 열려 있는 파일은 그대�
     await s.scan();
     fs.promises.rename = async () => { throw Object.assign(new Error('x'), { code: 'EXDEV' }); };
     fs.promises.unlink = async (p) => { if (p === locked) throw Object.assign(new Error('busy'), { code: 'EBUSY' }); return origUnlink(p); };
-    const r = await s.move({ paths: [small, locked], target: 'D', shortcut: false });
+    const r = await s.move({ paths: [small, locked], target: 'D', desktopLink: false });
     assert.strictEqual(r.moved, 1);
     assert.deepStrictEqual(r.failed, [{ name: '재생 중.mp4', reason: 'locked' }]);
     const dest = path.join(env.platform.paths.dDrive, MOVE_ROOT, '내 동영상', '짧은 영상.mp4');
@@ -118,5 +125,21 @@ test('옮기기: 공간 부족·잘못된 요청', async () => {
     assert.strictEqual((await s.move({ paths: [results[0].path], target: 'C' })).code, 'bad-request');
     const st = env.platform._state(); st.disks.D.free = 1 * GB;
     assert.strictEqual((await s.move({ paths: [results[0].path], target: 'D' })).code, 'no-space');
+  } finally { env.cleanup(); }
+});
+
+test('같은 파일 묶음: (1)·복사본 표시를 떼고 이름·크기가 같으면 같은 파일', async () => {
+  const env = freshEnv();
+  try {
+    const dl = env.platform.paths.downloads;
+    for (const n of ['ZWCAD_2026.exe', 'ZWCAD_2026 (1).exe', path.join('CAD', 'ZWCAD_2026.exe')]) {
+      const f = path.join(dl, n); fs.mkdirSync(path.dirname(f), { recursive: true });
+      const fd = fs.openSync(f, 'w'); fs.ftruncateSync(fd, 549 * MB); fs.closeSync(fd);
+    }
+    const s = createCdriveService(env);
+    const { results } = await s.scan();
+    const z = results.filter((r) => /^ZWCAD_2026/.test(r.name));
+    assert.strictEqual(z.length, 3);
+    assert.ok(z.every((r) => r.dup === 3));
   } finally { env.cleanup(); }
 });

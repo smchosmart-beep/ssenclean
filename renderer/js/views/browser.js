@@ -1,6 +1,6 @@
-import { h, btn, api, hero, pageHead, tip, toast, confirmDialog, checkbox, icon, fmtBytes, emptyState } from '../ui.js';
+import { h, btn, api, hero, pageHead, tip, toast, confirmDialog, checkbox, icon, fmtBytes, emptyState, pendingCard } from '../ui.js';
 
-const KIND_ICON = { shortcut: 'link', 'fake-shortcut': 'link', url: 'globe', startup: 'play', task: 'calendar', program: 'trash', proxy: 'globe', extension: 'plus', homepage: 'home', search: 'search' };
+const KIND_ICON = { shortcut: 'link', 'fake-shortcut': 'link', url: 'globe', startup: 'play', 'startup-machine': 'play', task: 'calendar', program: 'trash', proxy: 'globe', extension: 'plus', homepage: 'home', search: 'search' };
 
 export default async function browserView(ctx) {
   let tab = ctx.params.tab || 'ads';
@@ -31,7 +31,7 @@ export default async function browserView(ctx) {
 
   // ── 광고 없애기 ──
   async function runScan() {
-    box.replaceChildren(h('section', { class: 'panel pad' }, h('div', { class: 'page-title' }, '광고 프로그램을 찾고 있어요'), h('div', { class: 'progress indeterminate', style: { marginTop: '14px' } }, h('i'))));
+    box.replaceChildren(pendingCard('브라우저 확인 중…', '바로가기·시작 프로그램·브라우저 설정에서 광고 흔적을 찾고 있어요'));
     scan = await api('browser:scan');
     selected.clear();
     scan.items.filter((i) => i.fixable && i.checked).forEach((i) => selected.add(i.id));
@@ -52,8 +52,9 @@ export default async function browserView(ctx) {
   let footerEl = null;
   function renderFooter() {
     if (!footerEl) return;
+    const admin = scan.items.some((i) => i.admin && selected.has(i.id));
     footerEl.replaceChildren(
-      h('span', { class: 'muted small', style: { flex: '1' } }, '치료한 내용은 [되돌리기]로 원래대로 돌릴 수 있어요.'),
+      h('span', { class: 'muted small', style: { flex: '1' } }, admin ? '치료한 내용은 [되돌리기]로 원래대로 돌릴 수 있어요. Windows 확인 창이 뜨면 [예]를 누르세요.' : '치료한 내용은 [되돌리기]로 원래대로 돌릴 수 있어요.'),
       btn('broom', selected.size ? `한 번에 치료하기 (${selected.size})` : '한 번에 치료하기', fix, { variant: 'primary', disabled: !selected.size, testid: 'ad-fix' }));
   }
 
@@ -62,6 +63,7 @@ export default async function browserView(ctx) {
     const ok = await confirmDialog({ title: `${ids.length}개를 치료할까요?`, body: '바로가기는 원래대로 고치고, 광고 아이콘은 휴지통으로 보내고, 자동 실행은 꺼요.', okLabel: '치료하기', okIcon: 'broom' });
     if (!ok) return;
     const r = await api('browser:fix', ids);
+    if (r.canceled) toast('Windows 확인 창에서 취소한 항목은 고치지 않았어요');
     const launched = r.results.filter((x) => x.launched).length;
     toast(`${r.fixed}개를 치료했어요${launched ? '. 열린 제거 창에서 마저 지워 주세요' : ''}`, r.undoId ? { action: { label: '되돌리기', run: async () => { await api('browser:undo'); toast('되돌렸어요'); runScan(); } } } : {});
     await runScan();
@@ -93,13 +95,7 @@ export default async function browserView(ctx) {
         h('div', { style: { padding: '8px 20px 0' } }, tip('확장 프로그램과 시작 페이지는 브라우저가 보호하고 있어서 쎈클린이 바꾸지 않아요. [설정 초기화]를 누르면 한 번에 원래대로 돌아가요.')),
         h('div', { class: 'items' }, info.map(itemRow))));
     }
-    if (scan.admin.length) {
-      parts.push(h('section', { class: 'panel pad' },
-        h('div', { class: 'section-title' }, `관리자 권한이 필요한 항목 ${scan.admin.length}개`),
-        scan.admin.map((a) => h('div', { class: 'muted' }, `${a.title} - ${a.reason}`)),
-        h('div', { style: { marginTop: '10px' } }, tip('정보 담당 선생님께 요청하세요.', 'info'))));
-    }
-    if (scan.canUndo) parts.push(h('div', { class: 'btn-row' }, btn('undo', '지난 치료 되돌리기', async () => { const r = await api('browser:undo'); toast(r.manual ? `되돌렸어요. 휴지통으로 보낸 아이콘 ${r.manual}개는 휴지통에서 꺼내 주세요` : '되돌렸어요'); runScan(); }, { testid: 'ad-undo' })));
+    if (scan.canUndo) parts.push(h('div', { class: 'btn-row' }, btn('undo', '지난 치료 되돌리기', async () => { const r = await api('browser:undo'); if (!r.ok) { toast(r.canceled ? 'Windows 확인 창에서 취소해서 되돌리지 않았어요' : '되돌리지 못했어요'); return; } toast(r.manual ? `되돌렸어요. 휴지통으로 보낸 아이콘 ${r.manual}개는 휴지통에서 꺼내 주세요` : '되돌렸어요'); runScan(); }, { testid: 'ad-undo' })));
     box.replaceChildren(...parts.filter(Boolean));
     renderFooter();
   }

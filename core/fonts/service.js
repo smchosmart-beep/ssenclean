@@ -1,5 +1,5 @@
 'use strict';
-// 폰트 메뉴 서비스. 관리자 권한 없이 내 계정 폰트만 정리한다. spec 5장
+// 폰트 메뉴 서비스. 내 계정 폰트는 바로, 이 PC 전체에 설치된 폰트는 Windows 확인 창([예])을 거쳐 정리한다. spec 5장
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -67,7 +67,9 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
         fileName: path.basename(r.file),
         regName: r.regName,
         scope: r.scope,
-        removable: r.scope === 'user',
+        // 이 PC 전체 폰트는 '사용 주의'(상용 제작사)만 정리 대상. 정보가 없는 폰트는 프린터·드라이버용일 수 있어 내 계정 것만.
+        removable: r.scope === 'user' || c.class === 'caution',
+        needsAdmin: r.scope === 'system',
         name: info.familyKo || info.family || info.familyEn || path.basename(r.file),
         nameEn: info.familyEn,
         manufacturer: info.manufacturer || '',
@@ -84,7 +86,7 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
     const count = (cls) => items.filter((i) => i.class === cls).length;
     return {
       items,
-      summary: { total: items.length, safe: count('safe'), caution: count('caution'), unknown: count('unknown'), cautionRemovable: items.filter((i) => i.class === 'caution' && i.removable).length },
+      summary: { total: items.length, safe: count('safe'), caution: count('caution'), unknown: count('unknown'), cautionRemovable: items.filter((i) => i.class === 'caution' && i.removable).length, needsAdmin: items.filter((i) => i.class === 'caution' && i.needsAdmin).length },
       school: schoolStatus(items),
       pending: store.read('font-pending.json', []).length,
       undo: store.read('font-undo.json', []).map((b) => ({ id: b.id, at: b.at, count: b.entries.length })),
@@ -102,35 +104,72 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
     const batch = { id: String(Date.now()), at: Date.now(), entries: [] };
     const backupDir = path.join(store.dir, 'font-backup', batch.id);
     const results = [];
+    const sys = [];
     for (const id of ids || []) {
       const item = lastList.get(id);
-      if (!item || !item.removable) { results.push({ id, ok: false, reason: item ? 'system' : 'unknown' }); continue; }
-      const regVal = platform.reg.read(USER_FONTS_KEY, item.regName);
+      if (!item || !item.removable) { results.push({ id, ok: false, reason: item ? 'not-removable' : 'unknown' }); continue; }
       fs.mkdirSync(backupDir, { recursive: true });
-      const backup = path.join(backupDir, item.fileName);
-      let moved = false;
-      try {
-        fs.copyFileSync(item.file, backup);
-      } catch { results.push({ id, ok: false, reason: 'error' }); continue; }
+      const backup = path.join(backupDir, `${sys.length + batch.entries.length}_${item.fileName}`);
+      try { fs.copyFileSync(item.file, backup); } catch { results.push({ id, ok: false, reason: 'error' }); continue; }
+      if (item.scope === 'system') { sys.push({ id, item, backup }); continue; }
+      const regVal = platform.reg.read(USER_FONTS_KEY, item.regName);
       platform.reg.del(USER_FONTS_KEY, item.regName);
       platform.fonts.remove(item.file);
+      let moved = false;
       try { fs.unlinkSync(item.file); moved = true; } catch {
         store.update('font-pending.json', [], (l) => { l.push(item.file); return l; });
       }
-      batch.entries.push({ name: item.name, regName: item.regName, regValue: regVal ? regVal.value : item.file, file: item.file, backup, pending: !moved });
+      batch.entries.push({ scope: 'user', name: item.name, regName: item.regName, regValue: regVal ? regVal.value : item.file, file: item.file, backup, pending: !moved });
       results.push({ id, ok: true, pending: !moved });
+    }
+    // 이 PC 전체에 설치된 폰트: 한 번의 확인 창으로 모두 처리
+    let canceled = false;
+    if (sys.length) {
+      const ops = [];
+      for (const { item } of sys) {
+        ops.push({ op: 'regDelete', key: SYS_FONTS_KEY, name: item.regName });
+        ops.push({ op: 'delete', path: item.file, delayIfLocked: true });
+      }
+      const regVals = sys.map(({ item }) => platform.reg.read(SYS_FONTS_KEY, item.regName));
+      sys.forEach(({ item }) => platform.fonts.remove(item.file));
+      const r = await platform.elevated(ops);
+      if (!r.ok && r.canceled) canceled = true;
+      sys.forEach(({ id, item, backup }, i) => {
+        const regOk = r.results && r.results[i * 2] && r.results[i * 2].ok;
+        const del = r.results && r.results[i * 2 + 1];
+        if (!r.ok || !regOk) {
+          platform.fonts.add(item.file); // 그대로 두기
+          try { fs.unlinkSync(backup); } catch { /* ignore */ }
+          results.push({ id, ok: false, reason: canceled ? 'canceled' : 'error' });
+          return;
+        }
+        const pending = !!(del && del.pending) || !(del && del.ok);
+        batch.entries.push({ scope: 'system', name: item.name, regName: item.regName, regValue: regVals[i] ? regVals[i].value : item.fileName, file: item.file, backup, pending });
+        results.push({ id, ok: true, pending });
+      });
     }
     platform.fonts.broadcast();
     if (batch.entries.length) store.update('font-undo.json', [], (l) => { l.push(batch); return l.slice(-10); });
-    return { batchId: batch.entries.length ? batch.id : null, results };
+    return { batchId: batch.entries.length ? batch.id : null, results, canceled };
   }
 
-  function undo(batchId) {
+  async function undo(batchId) {
     const batches = store.read('font-undo.json', []);
     const batch = batches.find((b) => b.id === batchId) || batches[batches.length - 1];
     if (!batch) return { ok: false };
     let restored = 0;
-    for (const e of batch.entries) {
+    const sys = batch.entries.filter((e) => e.scope === 'system');
+    if (sys.length) {
+      const ops = [];
+      for (const e of sys) {
+        ops.push({ op: 'copy', from: e.backup, to: e.file });
+        ops.push({ op: 'regSet', key: SYS_FONTS_KEY, name: e.regName, type: 'String', value: e.regValue });
+      }
+      const r = await platform.elevated(ops);
+      if (!r.ok) return { ok: false, canceled: !!r.canceled };
+      sys.forEach((e) => { platform.fonts.add(e.file); restored++; });
+    }
+    for (const e of batch.entries.filter((x) => x.scope !== 'system')) {
       try {
         if (!fs.existsSync(e.file)) { fs.mkdirSync(path.dirname(e.file), { recursive: true }); fs.copyFileSync(e.backup, e.file); }
         platform.reg.write(USER_FONTS_KEY, e.regName, platform.REG.SZ, e.regValue);

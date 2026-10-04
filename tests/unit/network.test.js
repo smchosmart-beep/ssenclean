@@ -70,9 +70,14 @@ test('교사: 내 IP 보기·메시지 복사·IP 바꾸기·연결 확인·원�
   assert.ok(u.ok);
   assert.strictEqual(u.info.primary.ip, '10.20.3.77', '바로 전 설정으로 되돌림');
 
-  // 권한이 없는 PC
+  // 권한이 없다고 거부되면 Windows 확인 창을 거쳐 다시 시도
   env.platform._state().network.denied = true;
-  assert.strictEqual((await svc.apply({ index: 12, dhcp: true })).code, 'denied');
+  env.platform._state().elevate = 'no';
+  assert.strictEqual((await svc.apply({ index: 12, dhcp: true })).code, 'canceled');
+  env.platform._state().elevate = 'yes';
+  const r3 = await svc.apply({ index: 12, dhcp: true });
+  assert.ok(r3.ok);
+  assert.ok(env.platform._log().some((l) => l.op === 'elevated' && l.what === 'netApply'));
 });
 
 test('정보부장: 교실별 IP 저장·갱신·중복 경고·배정 메시지·CSV', async (t) => {

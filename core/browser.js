@@ -13,6 +13,8 @@ const INET_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet S
 const INET_POLICY = ['HKCU\\Software\\Policies\\Microsoft\\Windows\\CurrentVersion\\Internet Settings', 'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'];
 const BROWSER_EXE = { 'chrome.exe': '크롬', 'msedge.exe': '엣지', 'whale.exe': '웨일' };
 const DISABLED_VALUE = Buffer.from([3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+const HKLM_RUN = 'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run';
+const HKLM_APPROVED_RUN = 'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run';
 const URL_RE = /\b(?:https?:\/\/|www\.)[^\s"']+/gi;
 
 function exeFromCommand(cmd) {
@@ -107,7 +109,7 @@ function createBrowserService({ platform, store, dataDir }) {
     }
   }
 
-  async function checkStartup(items, admin) {
+  async function checkStartup(items) {
     const cands = [];
     for (const [key, once] of [[RUN_KEY, false], [RUNONCE_KEY, true]]) {
       for (const [name, v] of Object.entries(R.values(key) || {})) {
@@ -150,10 +152,16 @@ function createBrowserService({ platform, store, dataDir }) {
       }
       items.push({ id: `startup:${c.kind}:${c.key || ''}:${c.name}`, kind: 'startup', title: v === 'adware' ? '광고 프로그램이 켤 때마다 실행돼요' : '의심되는 프로그램이 켤 때마다 실행돼요', detail: `${c.name} (${path.basename(c.exe)})`, reason, verdict: v, checked: v === 'adware', fixable: true, data: c });
     }
-    // HKLM에 있는 것은 권한 밖이므로 안내만
-    for (const [name, v] of Object.entries(R.values('HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run') || {})) {
+    // 이 PC 전체 시작 프로그램(HKLM): 고칠 때 Windows 확인 창([예])을 거친다
+    const approvedMachine = R.values(HKLM_APPROVED_RUN) || {};
+    for (const [name, v] of Object.entries(R.values(HKLM_RUN) || {})) {
       if (isProtected(name, v.value)) continue;
-      if (dbName(name, v.value)) admin.push({ title: name, reason: '모든 사용자에게 설치된 광고 프로그램이에요' });
+      const ap = approvedMachine[name];
+      if (ap && Buffer.isBuffer(ap.value) && (ap.value[0] & 1)) continue;
+      if (dbName(name, v.value)) {
+        const exe = exeFromCommand(v.value);
+        items.push({ id: `startup:machine:${name}`, kind: 'startup-machine', title: '광고 프로그램이 켤 때마다 실행돼요', detail: `${name} (${path.basename(exe)})`, reason: '광고 프로그램으로 알려져 있어요', verdict: 'adware', checked: true, fixable: true, admin: true, data: { name } });
+      }
     }
   }
 
@@ -188,13 +196,12 @@ function createBrowserService({ platform, store, dataDir }) {
     }
   }
 
-  function checkPrograms(items, admin) {
+  function checkPrograms(items) {
     for (const e of uninstallEntries(platform)) {
       if (isProtected(e.name, e.publisher)) continue;
       if (!dbName(e.name, e.publisher)) continue;
-      if (e.hive === 'HKCU' && e.uninstall) {
-        items.push({ id: 'prog:' + e.key, kind: 'program', title: '광고 프로그램이 설치되어 있어요', detail: e.name, reason: '광고 프로그램으로 알려져 있어요. 제거 창이 열리면 안내에 따라 지워 주세요', verdict: 'adware', checked: true, fixable: true, data: { uninstall: e.uninstall, name: e.name } });
-      } else admin.push({ title: e.name, reason: '모든 사용자에게 설치된 광고 프로그램이에요' });
+      if (!e.uninstall) continue;
+      items.push({ id: 'prog:' + e.key, kind: 'program', title: '광고 프로그램이 설치되어 있어요', detail: e.name, reason: '광고 프로그램으로 알려져 있어요. 제거 창이 열리면 안내에 따라 지워 주세요', verdict: 'adware', checked: true, fixable: true, admin: e.hive !== 'HKCU', data: { uninstall: e.uninstall, name: e.name } });
     }
   }
 
@@ -253,10 +260,9 @@ function createBrowserService({ platform, store, dataDir }) {
 
   async function scan() {
     const items = [];
-    const admin = [];
     const steps = [
-      () => checkShortcuts(items), () => checkUrlFiles(items), () => checkStartup(items, admin),
-      () => checkTasks(items), () => checkPrograms(items, admin), () => checkProxy(items), () => checkBrowserSettings(items),
+      () => checkShortcuts(items), () => checkUrlFiles(items), () => checkStartup(items),
+      () => checkTasks(items), () => checkPrograms(items), () => checkProxy(items), () => checkBrowserSettings(items),
     ];
     for (const s of steps) { try { await s(); } catch { /* 한 항목 실패해도 나머지는 계속 */ } }
     const order = { adware: 0, suspect: 1 };
@@ -266,7 +272,6 @@ function createBrowserService({ platform, store, dataDir }) {
     return {
       at: lastScan.at,
       items: items.map(({ data, ...rest }) => rest),
-      admin,
       running: await runningBrowsers(),
       canUndo: store.list('browser-undo').length > 0,
     };
@@ -300,6 +305,7 @@ function createBrowserService({ platform, store, dataDir }) {
 
   async function fix(ids) {
     if (!lastScan) return { ok: false, code: 'stale' };
+    const machine = [];
     const undo = { id: String(Date.now()), at: Date.now(), entries: [] };
     const results = [];
     for (const id of ids || []) {
@@ -350,13 +356,17 @@ function createBrowserService({ platform, store, dataDir }) {
             break;
           }
           case 'program': {
+            // 제거 프로그램이 관리자 권한을 요구하면 Windows 확인 창이 뜨도록 셸로 실행한다
             const cmd = d.uninstall;
             const exe = exeFromCommand(cmd);
             const args = cmd.slice(cmd.indexOf(exe) + exe.length).replace(/^"/, '').trim();
-            platform.launch(exe, args ? args.split(/\s+/) : []);
-            results.push({ id, ok: true, launched: true });
+            const ok = await platform.shellRun(exe, args);
+            results.push({ id, ok: !!ok, launched: true });
             break;
           }
+          case 'startup-machine':
+            machine.push({ id, name: d.name, prev: R.read(HKLM_APPROVED_RUN, d.name) });
+            break;
           case 'proxy': {
             const prev = { ProxyEnable: R.read(INET_KEY, 'ProxyEnable'), AutoConfigURL: R.read(INET_KEY, 'AutoConfigURL') };
             R.write(INET_KEY, 'ProxyEnable', platform.REG.DWORD, 0);
@@ -369,9 +379,20 @@ function createBrowserService({ platform, store, dataDir }) {
         }
       } catch { results.push({ id, ok: false }); }
     }
+    // 이 PC 전체 시작 프로그램은 한 번의 확인 창으로 끈다
+    let canceled = false;
+    if (machine.length) {
+      const r = await platform.elevated(machine.map((m) => ({ op: 'regSet', key: HKLM_APPROVED_RUN, name: m.name, type: 'Binary', value: [...DISABLED_VALUE] })));
+      canceled = !!r.canceled;
+      machine.forEach((m, i) => {
+        const ok = r.ok && r.results[i] && r.results[i].ok;
+        if (ok) undo.entries.push({ kind: 'approved-machine', name: m.name, prev: m.prev ? [...m.prev.value] : null });
+        results.push({ id: m.id, ok: !!ok });
+      });
+    }
     if (undo.entries.length) store.write(path.join('browser-undo', `${undo.id}.json`), undo);
     store.write('browser-last.json', { at: Date.now(), count: Math.max(0, lastScan.items.size - results.filter((r) => r.ok).length), adware: 0, total: lastScan.items.size });
-    return { ok: true, undoId: undo.entries.length ? undo.id : null, results, fixed: results.filter((r) => r.ok).length };
+    return { ok: true, undoId: undo.entries.length ? undo.id : null, results, fixed: results.filter((r) => r.ok).length, canceled };
   }
 
   async function undoFix() {
@@ -380,6 +401,12 @@ function createBrowserService({ platform, store, dataDir }) {
     const rel = path.join('browser-undo', files[files.length - 1]);
     const u = store.read(rel, null);
     let restored = 0, manual = 0;
+    const machine = u.entries.filter((e) => e.kind === 'approved-machine');
+    if (machine.length) {
+      const r = await platform.elevated(machine.map((e) => (e.prev ? { op: 'regSet', key: HKLM_APPROVED_RUN, name: e.name, type: 'Binary', value: e.prev } : { op: 'regDelete', key: HKLM_APPROVED_RUN, name: e.name })));
+      if (!r.ok) return { ok: false, canceled: !!r.canceled };
+      restored += r.results.filter((x) => x && x.ok).length;
+    }
     for (const e of [...u.entries].reverse()) {
       try {
         if (e.kind === 'shortcut') { platform.shell.writeShortcut(e.file, 'replace', { target: e.link.target, args: e.link.args || '', cwd: e.link.cwd || '', icon: e.link.icon || '', iconIndex: e.link.iconIndex || 0, description: e.link.description || '' }); restored++; }

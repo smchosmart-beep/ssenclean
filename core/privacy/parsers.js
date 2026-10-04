@@ -144,9 +144,30 @@ function parseHwp(buf) {
 const { parseSpreadsheet } = require('./sheets');
 
 // ── PDF ──
+// PDF.js는 process.type이 'browser'가 아니면(Electron utilityProcess는 'utility') 브라우저로 착각해
+// Worker를 찾다가 모든 PDF 열기에 실패한다. 불러오는 동안만 Node로 보이게 하고,
+// 작업자 모듈도 미리 불러 같은 스레드에서 돌게 한다(globalThis.pdfjsWorker).
 let pdfjsPromise = null;
 function pdfjs() {
-  if (!pdfjsPromise) pdfjsPromise = import('pdfjs-dist/legacy/build/pdf.mjs');
+  if (pdfjsPromise) return pdfjsPromise;
+  pdfjsPromise = (async () => {
+    const hasType = Object.prototype.hasOwnProperty.call(process, 'type');
+    const saved = process.type;
+    const masked = saved && saved !== 'browser';
+    if (masked) { try { Object.defineProperty(process, 'type', { value: undefined, configurable: true, writable: true, enumerable: true }); } catch { /* ignore */ } }
+    try {
+      const lib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      if (!globalThis.pdfjsWorker) globalThis.pdfjsWorker = await import('pdfjs-dist/legacy/build/pdf.worker.mjs');
+      return lib;
+    } finally {
+      if (masked) {
+        try {
+          if (hasType) Object.defineProperty(process, 'type', { value: saved, configurable: true, writable: true, enumerable: true });
+          else delete process.type;
+        } catch { /* ignore */ }
+      }
+    }
+  })();
   return pdfjsPromise;
 }
 async function parsePdf(buf) {

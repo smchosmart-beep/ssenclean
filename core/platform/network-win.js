@@ -1,6 +1,6 @@
 'use strict';
 // Windows 네트워크: 조회는 PowerShell(읽기 전용, 일반 권한), 변경은 netsh.
-// 학교 PC 실기: 교사 계정에 네트워크 설정 권한이 있어 관리자 암호 없이 IP 변경 가능.
+// 권한이 없어 거부되면 Windows 확인 창([예])을 거쳐 같은 명령을 관리자 권한으로 다시 실행한다.
 const net = require('net');
 const { runPowerShell, run } = require('./exec');
 
@@ -31,7 +31,7 @@ function classify(r) {
 }
 
 // cfg: { index, dhcp, ip, mask, gateway, dns1, dns2 }
-async function apply(cfg) {
+function stepsFor(cfg) {
   const name = `name=${cfg.index}`; // 이름(이더넷 2 등) 대신 인터페이스 번호를 써서 띄어쓰기·한글 문제를 피한다
   const steps = [];
   if (cfg.dhcp) {
@@ -46,7 +46,11 @@ async function apply(cfg) {
       steps.push(['set', 'dnsservers', name, 'source=static', 'address=none']);
     }
   }
-  for (const s of steps) {
+  return steps;
+}
+
+async function apply(cfg) {
+  for (const s of stepsFor(cfg)) {
     const r = await netsh(s);
     const code = classify(r);
     // DHCP로 바꿀 때 '이미 DHCP' 같은 안내는 실패가 아니다
@@ -81,4 +85,12 @@ async function connectivity(gateway) {
   return { gateway: gw, internet };
 }
 
-module.exports = { adapters, apply, connectivity };
+// 관리자 권한으로 다시 실행. 반환: 'ok' | 'canceled' | 'error'
+async function applyElevated(cfg, runElevated) {
+  const ops = stepsFor(cfg).map((st) => ({ op: 'netsh', args: ['interface', 'ipv4', ...st], allowAlready: !!cfg.dhcp }));
+  const r = await runElevated(ops);
+  if (!r.ok) return r.canceled ? 'canceled' : 'error';
+  return r.results.every((x) => x && x.ok) ? 'ok' : 'error';
+}
+
+module.exports = { adapters, apply, applyElevated, connectivity, stepsFor };

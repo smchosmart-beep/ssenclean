@@ -97,26 +97,43 @@ test('폰트: 분류·정리·되돌리기·학교안심 설치', async (t) => {
   assert.strictEqual(by['수상한글꼴'].class, 'unknown');
   assert.strictEqual(by['Cafe24 PRO Slim'].class, 'safe');
   const sysSandoll = l.items.find((i) => i.scope === 'system' && i.class === 'caution');
-  assert.ok(sysSandoll && !sysSandoll.removable, '시스템 폰트는 정리 불가');
-  assert.strictEqual(l.summary.cautionRemovable, 2);
+  assert.ok(sysSandoll && sysSandoll.removable && sysSandoll.needsAdmin, '이 PC 전체 폰트도 확인 창을 거쳐 정리 가능');
+  const userCaution = l.items.filter((i) => i.class === 'caution' && i.scope === 'user');
+  assert.strictEqual(userCaution.length, 2);
+  assert.strictEqual(l.summary.cautionRemovable, 3);
+  const sysUnknown = l.items.find((i) => i.scope === 'system' && i.class === 'unknown');
+  if (sysUnknown) assert.strictEqual(sysUnknown.removable, false, '정보 없는 PC 전체 폰트는 정리하지 않음');
 
-  const ids = l.items.filter((i) => i.class === 'caution' && i.removable).map((i) => i.id);
-  const r = svc.clean(ids);
-  const res = await r;
+  // 내 계정 폰트: 확인 창 없이
+  const res = await svc.clean(userCaution.map((i) => i.id));
   assert.strictEqual(res.results.filter((x) => x.ok).length, 2);
   assert.ok(!fs.existsSync(by['산돌테스트고딕'].file));
+  assert.ok(!env.platform._log().some((x) => x.op === 'elevated'));
   const l2 = svc.list();
-  assert.strictEqual(l2.summary.cautionRemovable, 0);
+  assert.strictEqual(l2.summary.cautionRemovable, 1);
   assert.strictEqual(l2.undo.length, 1);
 
-  // 시스템 폰트 id로는 정리되지 않음
+  // PC 전체 폰트: 확인 창에서 [아니요] → 그대로
+  env.platform._state().elevate = 'no';
   const r2 = await svc.clean([sysSandoll.id]);
+  assert.strictEqual(r2.canceled, true);
   assert.strictEqual(r2.results[0].ok, false);
+  assert.ok(fs.existsSync(sysSandoll.file));
+  // [예] → 레지스트리(HKLM)와 파일이 지워짐, 백업 후 되돌리기 가능
+  env.platform._state().elevate = 'yes';
+  const r3 = await svc.clean([sysSandoll.id]);
+  assert.strictEqual(r3.results[0].ok, true);
+  assert.ok(!fs.existsSync(sysSandoll.file));
+  assert.strictEqual(env.platform.reg.read('HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts', sysSandoll.regName), undefined);
+  const u3 = await svc.undo(r3.batchId);
+  assert.ok(u3.ok && u3.restored === 1);
+  assert.ok(fs.existsSync(sysSandoll.file));
+  assert.ok(env.platform.reg.read('HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts', sysSandoll.regName));
 
-  const u = svc.undo(res.batchId);
+  const u = await svc.undo(res.batchId);
   assert.strictEqual(u.restored, 2);
   assert.ok(fs.existsSync(by['산돌테스트고딕'].file));
-  assert.strictEqual(svc.list().summary.cautionRemovable, 2);
+  assert.strictEqual(svc.list().summary.cautionRemovable, 3);
 
   assert.strictEqual(l.school.allInstalled, false);
   const inst = svc.installSchool();
@@ -174,7 +191,7 @@ test('PC암호: 변경일 경과·임박', async (t) => {
   assert.strictEqual(st.canChangeHere, false);
 });
 
-test('화면보호기: 꺼짐 → 안전 설정 → 되돌리기, 정책 관리', async (t) => {
+test('화면보호기: 꺼짐 → 안전 설정 → 되돌리기', async (t) => {
   const env = freshEnv();
   t.after(env.cleanup);
   const svc = createScreensaverService(env);
@@ -184,9 +201,6 @@ test('화면보호기: 꺼짐 → 안전 설정 → 되돌리기, 정책 관리'
   assert.ok(env.platform._log().some((l) => l.op === 'spi' && l.secure === true));
   const u = svc.undo();
   assert.strictEqual(u.status.safe, false);
-  env.platform.reg.write('HKCU\\Software\\Policies\\Microsoft\\Windows\\Control Panel\\Desktop', 'ScreenSaveActive', 1, '0');
-  assert.strictEqual(svc.status().managed, true);
-  assert.strictEqual(svc.secureSetup().code, 'managed');
 });
 
 test('업데이트: 크롬은 이 PC의 구글 업데이트 답을 따른다', async (t) => {
@@ -250,14 +264,6 @@ test('업데이트: 구글 업데이트를 못 쓰면 주소창 대체, 서버 �
   await waitFor(() => events.some((e) => e.final));
   assert.strictEqual(events[events.length - 1].phase, 'opened');
   assert.ok(env.platform._log().some((l) => l.op === 'omnibox'));
-});
-
-test('업데이트: 학교 정책으로 크롬 업데이트를 끈 PC', async (t) => {
-  const env = freshEnv();
-  t.after(env.cleanup);
-  env.platform.reg.write('HKLM\\SOFTWARE\\Policies\\Google\\Update', 'UpdateDefault', 4, 0);
-  const svc = createUpdateService(env);
-  assert.strictEqual((await svc.check()).find((u) => u.id === 'chrome').state, 'managed');
 });
 
 test('업데이트: 한글은 실제 업데이트 프로그램 경로와 Hwp.exe 버전', async (t) => {
@@ -399,4 +405,25 @@ test('브라우저: 찾기·치료·되돌리기·기록 지우기', async (t) =
   assert.ok(fs.existsSync(path.join(prof, 'Login Data')), '저장된 비밀번호는 지우지 않음');
   assert.ok(fs.existsSync(path.join(prof, 'Network', 'Cookies')), '쿠키는 선택하지 않으면 남김');
   assert.ok(!fs.existsSync(path.join(prof, 'History')));
+});
+
+test('브라우저: 이 PC 전체 시작 프로그램(HKLM)도 확인 창을 거쳐 끄고 되돌린다', async (t) => {
+  const env = freshEnv();
+  t.after(env.cleanup);
+  const run = 'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run';
+  const approved = 'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run';
+  env.platform.reg.write(run, 'MyWebSearch', 1, '"C:\\Program Files\\MyWebSearch\\mws.exe" /startup');
+  const svc = createBrowserService(env);
+  const sc = await svc.scan();
+  const it = sc.items.find((i) => i.kind === 'startup-machine');
+  assert.ok(it && it.admin && it.fixable);
+  assert.strictEqual(sc.admin, undefined, '따로 안내하는 목록은 없앰');
+  const r = await svc.fix([it.id]);
+  assert.ok(r.results.find((x) => x.id === it.id).ok);
+  const v = env.platform.reg.read(approved, 'MyWebSearch');
+  assert.ok(v && v.value[0] === 3, '꺼짐 표시');
+  assert.ok(!(await svc.scan()).items.some((i) => i.kind === 'startup-machine'));
+  const u = await svc.undo();
+  assert.ok(u.ok);
+  assert.strictEqual(env.platform.reg.read(approved, 'MyWebSearch'), undefined);
 });

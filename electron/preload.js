@@ -11,7 +11,7 @@ const INVOKE = [
   'screensaver:status', 'screensaver:secure', 'screensaver:undo', 'screensaver:open',
   'updates:check', 'updates:run',
   'uninstall:open',
-  'cdrive:status', 'cdrive:scan', 'cdrive:stop', 'cdrive:results', 'cdrive:move', 'cdrive:remove', 'cdrive:emptyRecycle', 'cdrive:openRecycle', 'cdrive:undo', 'cdrive:openFolder', 'cdrive:reveal',
+  'cdrive:status', 'cdrive:scan', 'cdrive:stop', 'cdrive:results', 'cdrive:move', 'cdrive:remove', 'cdrive:emptyRecycle', 'cdrive:openRecycle', 'cdrive:undo', 'cdrive:openFolder', 'cdrive:reveal', 'cdrive:prefs',
   'desktop:status', 'desktop:plan', 'desktop:apply', 'desktop:undo', 'desktop:history', 'desktop:openArchive',
   'browser:scan', 'browser:fix', 'browser:undo', 'browser:reset', 'browser:running', 'browser:close', 'browser:sizes', 'browser:clean',
   'app:copy', 'app:paste',

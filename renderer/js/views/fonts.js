@@ -37,7 +37,7 @@ export default async function fontsView(ctx) {
       h('div', { class: 'tx' },
         h('strong', {}, item.name),
         h('span', {}, [item.manufacturer || '제작사 정보 없음', item.reason].join(' · ')),
-        !item.removable && item.class !== 'safe' ? h('span', { style: { color: 'var(--warn)' } }, '모든 사용자용 폰트라 정리하려면 정보 담당 선생님께 요청하세요') : null),
+        ),
       sample(item),
       h('span', { class: 'tag' }, CLASS_TAG[item.class]));
   }
@@ -46,7 +46,8 @@ export default async function fontsView(ctx) {
   function renderFooter() {
     if (!footerEl) return;
     const n = selected.size;
-    footerEl.replaceChildren(h('span', { class: 'muted small', style: { flex: '1' } }, '정리한 폰트는 보관해 두었다가 언제든 되돌릴 수 있어요.'),
+    const admin = [...selected].some((id) => { const it = data.items.find((x) => x.id === id); return it && it.needsAdmin; });
+    footerEl.replaceChildren(h('span', { class: 'muted small', style: { flex: '1' } }, admin ? '정리한 폰트는 보관해 두었다가 언제든 되돌릴 수 있어요. Windows 확인 창이 뜨면 [예]를 누르세요.' : '정리한 폰트는 보관해 두었다가 언제든 되돌릴 수 있어요.'),
       btn('broom', n ? `선택한 폰트 ${n}개 정리하기` : '선택한 폰트 정리하기', clean, { variant: 'primary', disabled: n === 0, testid: 'fonts-clean' }));
   }
 
@@ -60,10 +61,11 @@ export default async function fontsView(ctx) {
     const ok = await confirmDialog({ title: `폰트 ${ids.length}개를 정리할까요?`, body: '이 폰트로 만든 문서는 다른 폰트로 보일 수 있어요. 정리한 폰트는 보관해 두었다가 되돌릴 수 있어요.', okLabel: '정리하기', okIcon: 'broom' });
     if (!ok) return;
     const r = await api('fonts:clean', ids);
+    if (r.canceled && !r.results.some((x) => x.ok)) { toast('Windows 확인 창에서 취소해서 정리하지 않았어요'); return; }
     const done = r.results.filter((x) => x.ok).length;
     const pend = r.results.filter((x) => x.pending).length;
     await load();
-    toast(pend ? `${done}개를 정리했어요. ${pend}개는 다시 켤 때 마저 정리할게요` : `폰트 ${done}개를 정리했어요`, r.batchId ? { action: { label: '되돌리기', run: async () => { await api('fonts:undo', r.batchId); await load(); toast('되돌렸어요'); } } } : {});
+    toast(pend ? `${done}개를 정리했어요. ${pend}개는 PC를 다시 켜면 마저 정리돼요` : `폰트 ${done}개를 정리했어요`, r.batchId ? { action: { label: '되돌리기', run: async () => { const u = await api('fonts:undo', r.batchId); await load(); toast(u.ok ? '되돌렸어요' : '되돌리지 못했어요'); } } } : {});
   }
 
   function schoolTab() {
@@ -81,7 +83,7 @@ export default async function fontsView(ctx) {
             tab = 'school'; render();
             toast(r.every((x) => x.ok) ? '학교안심 글꼴을 설치했어요' : '일부를 설치하지 못했어요');
           }, { variant: 'primary', testid: 'install-school' })),
-      h('div', { style: { marginTop: '14px' } }, tip('내 계정에만 설치되어 관리자 권한 없이 쓸 수 있어요. 한글·파워포인트는 다시 켜야 목록에 보여요.')));
+      h('div', { style: { marginTop: '14px' } }, tip('한글·파워포인트는 다시 켜야 글꼴 목록에 보여요.')));
   }
 
   function render() {
@@ -108,7 +110,7 @@ export default async function fontsView(ctx) {
     const undoBox = data.undo.length ? h('section', { class: 'panel pad', style: { display: 'flex', alignItems: 'center', gap: '16px' } },
       h('div', { style: { flex: '1' } }, h('div', { class: 'section-title', style: { marginBottom: '0' } }, '최근 정리 기록'),
         h('div', { class: 'muted small' }, `${fmtDate(data.undo[data.undo.length - 1].at)} · ${data.undo[data.undo.length - 1].count}개 정리`)),
-      btn('undo', '되돌리기', async () => { await api('fonts:undo', data.undo[data.undo.length - 1].id); await load(); toast('되돌렸어요'); }, { testid: 'fonts-undo' })) : null;
+      btn('undo', '되돌리기', async () => { const u = await api('fonts:undo', data.undo[data.undo.length - 1].id); await load(); toast(u.ok ? '되돌렸어요' : u.canceled ? 'Windows 확인 창에서 취소해서 되돌리지 않았어요' : '되돌리지 못했어요'); }, { testid: 'fonts-undo' })) : null;
     box.replaceChildren(head,
       h('section', { class: 'panel' }, h('div', { style: { padding: '14px 20px', borderBottom: '1px solid var(--hairline)' } }, tabs), body, tab === 'caution' ? footerEl : null),
       undoBox);

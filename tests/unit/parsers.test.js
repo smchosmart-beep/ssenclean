@@ -93,3 +93,18 @@ test('xls: 엑셀 방식(공유 문자열 SST가 CONTINUE로 나뉨, LABELSST·R
   assert.strictEqual(row.text, '1777 | 학생1777가나다라마바사아자차카타파하 | 900101-1234567 | 1777.5');
   assert.strictEqual(r.segments[2000].text, '2000 | 학생2000가나다라마바사아자차카타파하 | 메모2000 | 2000.5');
 });
+
+// Electron utilityProcess(process.type === 'utility')에서도 PDF를 읽어야 한다. (1.2.0까지 전부 '읽을 수 없음'이던 버그)
+test('PDF: 검사 프로세스(utility) 환경에서도 읽힘', async () => {
+  const { execFileSync } = require('child_process');
+  const path = require('path');
+  const code = `
+    process.type = 'utility';
+    Object.defineProperty(process.versions, 'electron', { value: '41.0.0' });
+    const F = require(${JSON.stringify(path.join(__dirname, '../../core/platform/mock-fixtures'))});
+    const { extract } = require(${JSON.stringify(path.join(__dirname, '../../core/privacy/parsers'))});
+    extract('a.pdf', F.pdf(['Kim 010-7777-8888'])).then((r) => process.stdout.write(JSON.stringify({ status: r.status, type: process.type })));
+  `;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { encoding: 'utf8' }));
+  assert.deepStrictEqual(out, { status: 'ok', type: 'utility' });
+});

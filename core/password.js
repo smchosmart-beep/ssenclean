@@ -34,7 +34,7 @@ function createPasswordService({ platform, store }) {
       level = dday < 0 ? 'danger' : dday <= 14 ? 'warn' : 'ok';
     } else if (a.hasPassword === true) level = 'info';
     return {
-      accountType: a.type, // local | microsoft | domain | unknown
+      accountType: a.type, // local | microsoft | unknown
       hasPassword: a.hasPassword, // true | false | null
       lastChanged, due, dday, cycle, source, level,
       canChangeHere: a.type === 'local' || (a.type === 'unknown' && a.hasPassword !== null),

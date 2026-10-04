@@ -101,7 +101,14 @@ function createServices({ platform, spawnScan, emit }) {
     'cdrive:scan': async () => (await s.cdrive.scan()).summary,
     'cdrive:stop': () => s.cdrive.stop(),
     'cdrive:results': () => s.cdrive.results(),
-    'cdrive:move': (o) => s.cdrive.move({ paths: o && o.paths, target: o && o.target, shortcut: !(o && o.shortcut === false) }),
+    'cdrive:move': (o) => s.cdrive.move({ paths: o && o.paths, target: o && o.target, desktopLink: !(o && o.desktopLink === false) }),
+    'cdrive:prefs': (o) => {
+      const p = {};
+      if (o && ['old', 'size'].includes(o.sort)) p.sort = o.sort;
+      if (o && typeof o.whySeen === 'boolean') p.whySeen = o.whySeen;
+      if (o && typeof o.desktopLink === 'boolean') p.desktopLink = o.desktopLink;
+      return s.cdrive.savePrefs(p);
+    },
     'cdrive:remove': (o) => s.cdrive.remove({ paths: o && o.paths }),
     'cdrive:emptyRecycle': () => s.cdrive.emptyRecycle(),
     'cdrive:openRecycle': () => platform.launch('explorer.exe', ['shell:RecycleBinFolder']),

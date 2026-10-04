@@ -132,13 +132,20 @@ function createMockPlatform({ root, seed = true } = {}) {
   // C의 남은 공간 = 시작 값 - (지금 C 안 파일 크기 - 시작 때 크기). D도 같은 방식.
   function disks() {
     const d = state.disks || { C: { total: 238 * 1024 ** 3, free: 9 * 1024 ** 3 }, D: { total: 931 * 1024 ** 3, free: 612 * 1024 ** 3 } };
-    const cNow = dirBytes(root, [paths.dDrive, statePath]);
-    const dNow = dirBytes(paths.dDrive);
-    if (d.C.bytes0 == null) { d.C.bytes0 = cNow; d.D.bytes0 = dNow; state.disks = d; save(); }
-    return [
-      { letter: 'C', root: paths.systemDrive, total: d.C.total, free: Math.max(0, d.C.free - (cNow - d.C.bytes0)), removable: false, label: '' },
-      { letter: 'D', root: paths.dDrive, total: d.D.total, free: Math.max(0, d.D.free - (dNow - d.D.bytes0)), removable: false, label: 'DATA' },
-    ];
+    state.disks = d;
+    const rootOf = (L) => (L === 'C' ? paths.systemDrive : path.join(root, `_${L}`));
+    const others = Object.keys(d).filter((L) => L !== 'C').map(rootOf);
+    const out = [];
+    let dirty = false;
+    for (const L of Object.keys(d).sort()) {
+      const r = rootOf(L);
+      if (L !== 'C') fs.mkdirSync(r, { recursive: true });
+      const now = L === 'C' ? dirBytes(root, [...others, statePath]) : dirBytes(r);
+      if (d[L].bytes0 == null) { d[L].bytes0 = now; dirty = true; }
+      out.push({ letter: L, root: r, total: d[L].total, free: Math.max(0, d[L].free - (now - d[L].bytes0)), removable: !!d[L].removable, label: d[L].label || (L === 'D' ? 'DATA' : '') });
+    }
+    if (dirty) save();
+    return out;
   }
 
   function trash(p) {
@@ -165,6 +172,25 @@ function createMockPlatform({ root, seed = true } = {}) {
       broadcast: () => true,
     },
     disks,
+    // 관리자 확인 창 흉내: state.elevate = 'yes'(기본) | 'no'(아니요 누름)
+    async elevated(ops) {
+      if ((state.elevate || 'yes') === 'no') { log({ op: 'elevated', canceled: true }); return { ok: false, canceled: true }; }
+      const results = [];
+      for (const o of ops) {
+        try {
+          if (o.op === 'regDelete') { if (reg.read(o.key, o.name) === undefined) throw new Error('none'); reg.del(o.key, o.name); results.push({ ok: true }); }
+          else if (o.op === 'regSet') { reg.write(o.key, o.name, { String: REG.SZ, Binary: REG.BINARY, DWord: REG.DWORD, ExpandString: REG.EXPAND_SZ }[o.type] || REG.SZ, o.type === 'Binary' ? Buffer.from(o.value) : o.value); results.push({ ok: true }); }
+          else if (o.op === 'copy') { fs.mkdirSync(path.dirname(o.to), { recursive: true }); fs.copyFileSync(o.from, o.to); results.push({ ok: true }); }
+          else if (o.op === 'delete') {
+            if ((state.lockedFiles || []).includes(o.path)) { if (!o.delayIfLocked) throw new Error('locked'); results.push({ ok: true, pending: true }); }
+            else { fs.unlinkSync(o.path); results.push({ ok: true }); }
+          } else if (o.op === 'netsh') results.push({ ok: true });
+          else results.push({ ok: false, error: 'unknown-op' });
+        } catch (e) { results.push({ ok: false, error: String(e.message) }); }
+      }
+      log({ op: 'elevated', ops: ops.map((o) => o.op) });
+      return { ok: true, results };
+    },
     recycleBin: {
       query: () => {
         let count = 0; try { count = fs.readdirSync(paths.trash).length; } catch { /* empty */ }
@@ -208,6 +234,7 @@ function createMockPlatform({ root, seed = true } = {}) {
       if (/chrome\.exe$/i.test(file)) { try { fs.unlinkSync(path.join(path.dirname(file), 'new_chrome.exe')); } catch { /* none */ } }
       return true;
     },
+    shellRun: async (file, args) => { log({ op: 'launch', file, args: args ? String(args).split(/\s+/) : [] }); return true; },
     run: async (file, args) => { log({ op: 'run', file, args }); return { ok: true, code: 0, stdout: '', stderr: '' }; },
     processes: async () => state.processes.map((s) => s.toLowerCase()),
     requestClose: async (image) => { state.processes = state.processes.filter((p) => p.toLowerCase() !== image.toLowerCase()); save(); log({ op: 'close', image }); },
@@ -262,6 +289,15 @@ function createMockPlatform({ root, seed = true } = {}) {
         save();
         log({ op: 'netApply', cfg });
         return 'ok';
+      },
+      async applyElevated(cfg) {
+        if ((state.elevate || 'yes') === 'no') return 'canceled';
+        const was = state.network.denied;
+        state.network.denied = false;
+        const r = await this.apply(cfg);
+        state.network.denied = was;
+        log({ op: 'elevated', what: 'netApply' });
+        return r;
       },
       async connectivity(gateway) {
         const ok = (state.network.reachable || []).includes(gateway);

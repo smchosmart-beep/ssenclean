@@ -77,6 +77,13 @@ function createNetworkService({ platform, store }) {
     return { ...p, found: !!(p.ip || p.dhcp), errors: M.validate(p) };
   }
 
+  // 권한이 없다고 거부되면 Windows 확인 창([예])을 거쳐 관리자 권한으로 다시 시도한다.
+  async function applyWithAdmin(cfg) {
+    const code = await platform.network.apply(cfg);
+    if (code !== 'denied' || !platform.network.applyElevated) return code;
+    return platform.network.applyElevated(cfg); // 'ok' | 'canceled' | 'error'
+  }
+
   async function apply(cfg) {
     const errors = M.validate(cfg);
     if (errors.length) return { ok: false, code: 'invalid', errors };
@@ -84,7 +91,7 @@ function createNetworkService({ platform, store }) {
     if (!before) return { ok: false, code: 'no-adapter' };
     const prev = view(before);
     store.write('network-undo.json', { at: Date.now(), index: prev.index, alias: prev.alias, dhcp: prev.dhcp, ip: prev.ip, mask: prev.mask, gateway: prev.gateway, dns1: prev.dns[0] || '', dns2: prev.dns[1] || '' });
-    const code = await platform.network.apply(cfg);
+    const code = await applyWithAdmin(cfg);
     if (code !== 'ok') return { ok: false, code };
     const check = await verify(cfg.dhcp ? null : cfg.gateway);
     return { ok: true, check, info: await info() };
@@ -105,7 +112,7 @@ function createNetworkService({ platform, store }) {
   async function undo() {
     const u = store.read('network-undo.json', null);
     if (!u) return { ok: false };
-    const code = await platform.network.apply({ index: u.index, dhcp: u.dhcp, ip: u.ip, mask: u.mask, gateway: u.gateway, dns1: u.dns1, dns2: u.dns2 });
+    const code = await applyWithAdmin({ index: u.index, dhcp: u.dhcp, ip: u.ip, mask: u.mask, gateway: u.gateway, dns1: u.dns1, dns2: u.dns2 });
     if (code !== 'ok') return { ok: false, code };
     store.write('network-undo.json', null);
     return { ok: true, check: await verify(u.dhcp ? null : u.gateway), info: await info() };

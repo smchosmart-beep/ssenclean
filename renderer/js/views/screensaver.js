@@ -10,7 +10,6 @@ export default async function screensaverView(ctx) {
     ctx.setDot('screensaver', st.level);
     const parts = [];
     if (st.safe) parts.push(hero({ level: 'ok', iconName: 'checkCircle', title: `${st.minutes}분 동안 사용하지 않으면 잠겨요`, desc: '화면보호기가 안전하게 설정되어 있어요.' }));
-    else if (st.managed) parts.push(hero({ level: 'info', iconName: 'info', title: '학교에서 관리 중인 설정이에요', desc: '화면보호기 설정은 정보 담당 선생님께 문의하세요.' }));
     else {
       const title = !st.active ? '화면보호기가 꺼져 있어요' : !st.secure ? '화면보호기를 풀 때 암호를 묻지 않아요' : `화면보호기가 ${st.minutes}분 뒤에야 켜져요`;
       parts.push(hero({ level: 'danger', iconName: 'monitor', title, desc: '자리를 비우면 화면이 그대로 보여요.' }));
@@ -21,7 +20,7 @@ export default async function screensaverView(ctx) {
         btn('lock', '암호 만들기', () => ctx.go('password'), { testid: 'ss-to-password' })));
     }
     const actions = h('div', { class: 'btn-row' });
-    if (!st.safe && !st.managed) actions.append(btn('shield', '안전하게 설정하기', async () => {
+    if (!st.safe) actions.append(btn('shield', '안전하게 설정하기', async () => {
       const r = await api('screensaver:secure');
       if (r.ok) toast('설정했어요. 이제 자리를 비우면 화면이 잠겨요'); else toast('설정하지 못했어요');
       render(r.status);

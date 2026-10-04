@@ -72,7 +72,6 @@ function createUpdateService({ platform, emit = () => {} }) {
     if (chromeJob) return { ...base, state: 'updating', progress: chromeProgress };
     if (chromeNeedsRestart(exe)) return { ...base, state: 'restart' };
     const policy = chromePolicy();
-    if (policy === 0) return { ...base, state: 'managed' };
 
     // 이 PC의 구글 업데이트에 직접 묻는다(크롬 정보 화면과 같은 답).
     const r = await platform.chromeUpdate.check();
@@ -91,13 +90,17 @@ function createUpdateService({ platform, emit = () => {} }) {
     return { ...base, state, latest: latest || null, via: 'server', offline: !json };
   }
 
+  let winCache = null;
   async function checkWindows() {
-    const managed = !!R.values('HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate');
-    const [last, pending] = await Promise.all([platform.windowsUpdate.lastInstalled(), platform.windowsUpdate.pendingCount()]);
+    // 대기 업데이트 개수는 1분 넘게 걸릴 수 있어 30분 동안 기억해 둔다(다시 점검 때 빠르게)
+    const fresh = winCache && Date.now() - winCache.at < 30 * 60000;
+    const [last, pending] = fresh ? [winCache.last, winCache.pending]
+      : await Promise.all([platform.windowsUpdate.lastInstalled(), platform.windowsUpdate.pendingCount()]);
+    if (!fresh && pending != null) winCache = { at: Date.now(), last, pending };
     let state = 'unknown';
     if (pending != null) state = pending > 0 ? 'outdated' : 'latest';
     else if (last) state = (Date.now() - Date.parse(last)) / 86400000 > 30 ? 'outdated' : 'unknown';
-    return { id: 'windows', name: 'Windows', lastInstalled: last, pending, state, managed, canUpdate: true };
+    return { id: 'windows', name: 'Windows', lastInstalled: last, pending, state, canUpdate: true };
   }
 
   async function checkOffice() {
@@ -218,6 +221,7 @@ function createUpdateService({ platform, emit = () => {} }) {
         return restartChrome(exe);
       }
       case 'windows':
+        winCache = null;
         await platform.shell.openExternal('ms-settings:windowsupdate');
         return { ok: true, guide: 'Windows 업데이트 화면에서 [업데이트 확인]을 누르세요.' };
       case 'office': {
@@ -236,7 +240,7 @@ function createUpdateService({ platform, emit = () => {} }) {
         for (let i = 0; i < 12; i++) {
           await new Promise((r) => setTimeout(r, 250));
           if ((await platform.processes()).includes(image)) {
-            return { ok: true, guide: '한컴오피스 업데이트 창을 열었어요. 관리자 암호를 물으면 정보 담당 선생님께 요청하세요.' };
+            return { ok: true, guide: '한컴오피스 업데이트 창을 열었어요. Windows 확인 창이 뜨면 [예]를 누르세요.' };
           }
         }
         return { ok: false, howto: true };

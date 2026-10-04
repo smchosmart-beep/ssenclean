@@ -1,4 +1,4 @@
-import { h, btn, api, onEvent, hero, pageHead, tip, statusRow, toast, fmtDate, modal } from '../ui.js';
+import { h, btn, api, onEvent, hero, pageHead, tip, statusRow, toast, fmtDate, modal, pendingCard } from '../ui.js';
 
 const ICON = { chrome: 'globe', windows: 'monitor', hangul: 'file', office: 'file' };
 const PHASE_TEXT = {
@@ -18,7 +18,7 @@ function howToHangul() {
         h('li', {}, '한글을 열어요.'),
         h('li', {}, '위쪽 메뉴에서 [도움말]을 눌러요.'),
         h('li', {}, '[업데이트]를 누르고 안내에 따라 진행해요.')),
-      h('div', { style: { marginTop: '10px' } }, tip('관리자 암호를 물으면 정보 담당 선생님께 요청하세요.', 'info'))),
+      h('div', { style: { marginTop: '10px' } }, tip('Windows 확인 창이 뜨면 [예]를 누르세요.', 'info'))),
     h('div', { class: 'actions' }, btn('check', '알겠어요', () => close(true), { variant: 'primary' }))));
 }
 
@@ -64,9 +64,6 @@ export default async function updatesView(ctx) {
       }, { testid: 'upd-chrome' });
     } else if (u.state === 'latest') {
       level = 'ok'; tag = '최신';
-    } else if (u.state === 'managed') {
-      level = 'info'; tag = '학교에서 관리';
-      desc += ' · 크롬 업데이트는 학교에서 관리하고 있어요';
     } else {
       right = btn('search', '업데이트 확인', async () => {
         const r = await api('updates:run', 'chrome');
@@ -84,7 +81,7 @@ export default async function updatesView(ctx) {
     else if (u.state === 'latest') { level = 'ok'; tag = '최신'; }
     else { level = 'info'; tag = '확인할 수 없어요'; }
     if (u.id === 'windows') {
-      desc = [u.lastInstalled ? `마지막 업데이트 ${fmtDate(u.lastInstalled)}` : null, u.pending ? `설치할 업데이트 ${u.pending}개` : null, u.managed ? '학교에서 관리하는 업데이트예요' : null].filter(Boolean).join(' · ') || '업데이트 기록을 확인할 수 없어요';
+      desc = [u.lastInstalled ? `마지막 업데이트 ${fmtDate(u.lastInstalled)}` : null, u.pending ? `설치할 업데이트 ${u.pending}개` : null].filter(Boolean).join(' · ') || '업데이트 기록을 확인할 수 없어요';
       right = btn(u.state === 'outdated' ? 'up' : 'search', u.state === 'outdated' ? '업데이트' : '업데이트 확인', async () => { const r = await api('updates:run', 'windows'); if (r.guide) toast(r.guide); }, { testid: 'upd-windows' });
     } else if (u.id === 'hangul') {
       desc = [u.version ? `현재 ${u.version}` : null, u.product].filter(Boolean).join(' · ');
@@ -104,11 +101,11 @@ export default async function updatesView(ctx) {
     box.replaceChildren(
       hero({ level: out.length ? 'warn' : 'ok', iconName: out.length ? 'up' : 'checkCircle', title: out.length ? '업데이트할 프로그램이 {}있어요' : '확인된 프로그램은 최신이에요', titleEmph: out.length ? `${out.length}개 ` : null, desc: '파일은 외부로 보내지 않고, 업데이트 확인에만 인터넷을 써요.', right: btn('refresh', '다시 확인', run, { testid: 'upd-recheck' }) }),
       h('section', { class: 'panel rows' }, list.length ? list.map(row) : h('div', { class: 'empty' }, '확인할 프로그램이 설치되어 있지 않아요')),
-      tip('쎈클린은 설치파일을 직접 내려받지 않고, 각 프로그램의 공식 업데이트 기능을 써요. 관리자 암호를 물으면 정보 담당 선생님께 요청하세요.'));
+      tip('쎈클린은 설치파일을 직접 내려받지 않고, 각 프로그램의 공식 업데이트 기능을 써요. Windows 확인 창이 뜨면 [예]를 누르세요.'));
   }
 
   async function run() {
-    if (!list.length) box.replaceChildren(h('section', { class: 'panel pad' }, h('div', { class: 'muted' }, '업데이트를 확인하고 있어요… (Windows는 1분 정도 걸릴 수 있어요)'), h('div', { class: 'progress indeterminate', style: { marginTop: '12px' } }, h('i'))));
+    if (!list.length) box.replaceChildren(pendingCard('업데이트 확인 중…', '크롬·Windows·한글·오피스 버전을 확인하고 있어요 (Windows는 1분 정도 걸릴 수 있어요)'));
     list = await api('updates:check');
     render();
   }

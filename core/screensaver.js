@@ -3,7 +3,6 @@
 const path = require('path');
 
 const KEY = 'HKCU\\Control Panel\\Desktop';
-const POLICY_KEY = 'HKCU\\Software\\Policies\\Microsoft\\Windows\\Control Panel\\Desktop';
 const NAMES = ['ScreenSaveActive', 'ScreenSaveTimeOut', 'ScreenSaverIsSecure', 'SCRNSAVE.EXE'];
 
 function createScreensaverService({ platform, store }) {
@@ -17,8 +16,6 @@ function createScreensaverService({ platform, store }) {
 
   function status() {
     const v = readAll();
-    const policy = R.values(POLICY_KEY);
-    const managed = !!(policy && Object.keys(policy).some((k) => NAMES.map((x) => x.toLowerCase()).includes(k.toLowerCase())));
     const timeoutSec = Number(v.ScreenSaveTimeOut) || 0;
     // SCRNSAVE.EXE 값이 비어 있으면 Windows는 화면보호기를 실행하지 않는다.
     const hasSaver = !!(v['SCRNSAVE.EXE'] && v['SCRNSAVE.EXE'].trim());
@@ -27,7 +24,7 @@ function createScreensaverService({ platform, store }) {
     const want = (store.settings.get().screensaverMinutes || 10) * 60;
     const safe = active && secure && timeoutSec > 0 && timeoutSec <= Math.max(want, 600);
     return {
-      active, secure, minutes: Math.round(timeoutSec / 60), hasSaver, managed, safe,
+      active, secure, minutes: Math.round(timeoutSec / 60), hasSaver, safe,
       level: safe ? 'ok' : 'danger',
       canUndo: !!store.read('screensaver-undo.json', null),
     };
@@ -35,7 +32,6 @@ function createScreensaverService({ platform, store }) {
 
   function secureSetup() {
     const st = status();
-    if (st.managed) return { ok: false, code: 'managed' };
     store.write('screensaver-undo.json', readAll());
     const minutes = store.settings.get().screensaverMinutes || 10;
     const saver = path.join(platform.paths.windir, 'System32', 'scrnsave.scr');

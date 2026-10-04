@@ -1,4 +1,4 @@
-import { h, btn, api, hero, pageHead, tip, toast, confirmDialog, modal, statusRow, radio, select, emptyState, fmtDate, icon } from '../ui.js';
+import { h, btn, api, hero, pageHead, tip, toast, confirmDialog, modal, statusRow, radio, select, emptyState, fmtDate, icon, pendingCard } from '../ui.js';
 
 const FIELDS = [['ip', 'IP 주소', '예: 10.20.3.42'], ['mask', '서브넷 마스크', '255.255.255.0'], ['gateway', '기본 게이트웨이', '예: 10.20.3.1'], ['dns1', '기본 DNS 서버', ''], ['dns2', '보조 DNS 서버', '(없으면 비워 두세요)']];
 const input = (value, opts = {}) => { const el = h('input', { class: 'field', type: 'text', inputmode: 'decimal', autocomplete: 'off', spellcheck: 'false', ...opts }); el.value = value || ''; return el; };
@@ -23,7 +23,7 @@ export default async function networkView(ctx) {
   let result = null;
 
   async function loadMine() {
-    box.replaceChildren(h('section', { class: 'panel pad' }, h('div', { class: 'muted' }, '네트워크 정보를 읽고 있어요…')));
+    box.replaceChildren(pendingCard('IP 주소 확인 중…', '네트워크와 인터넷 연결을 확인하고 있어요'));
     info = await api('network:info');
     const conn = info.primary ? await api('network:check') : null;
     renderMine(conn);
@@ -101,13 +101,13 @@ export default async function networkView(ctx) {
             title: 'IP를 바꿀까요?',
             body: h('div', {},
               h('div', { class: 'msgbox' }, form.dhcp ? '자동으로 IP 받기(DHCP)' : `IP ${form.ip}\n서브넷 ${form.mask}\n게이트웨이 ${form.gateway || '-'}\nDNS ${[form.dns1, form.dns2].filter(Boolean).join(', ') || '-'}`),
-              h('div', { class: 'muted small', style: { marginTop: '8px' } }, `지금 설정(IP ${p.ip})은 저장해 두었다가 [원래대로]로 되돌릴 수 있어요. 바꾸는 동안 인터넷이 잠깐 끊겨요.`)),
+              h('div', { class: 'muted small', style: { marginTop: '8px' } }, `지금 설정(IP ${p.ip})은 저장해 두었다가 [원래대로]로 되돌릴 수 있어요. 바꾸는 동안 인터넷이 잠깐 끊겨요. Windows 확인 창이 뜨면 [예]를 누르세요.`)),
             okLabel: '바꾸기', okIcon: 'check',
           });
           if (!ok) return;
           const r = await api('network:apply', cfg);
           if (!r.ok) {
-            const msg = { denied: '이 PC에서는 IP를 바꿀 권한이 없어요. 정보 담당 선생님께 요청하세요.', invalid: '입력한 값을 다시 확인해 주세요.', 'no-adapter': '네트워크 장치를 찾지 못했어요.' }[r.code] || 'IP를 바꾸지 못했어요.';
+            const msg = { canceled: 'Windows 확인 창에서 취소해서 바꾸지 않았어요. 다시 누르고 [예]를 누르세요.', denied: 'IP를 바꾸지 못했어요.', invalid: '입력한 값을 다시 확인해 주세요.', 'no-adapter': '네트워크 장치를 찾지 못했어요.' }[r.code] || 'IP를 바꾸지 못했어요.';
             await confirmDialog({ title: '바꾸지 못했어요', body: msg, okLabel: '알겠어요', cancelLabel: '닫기' });
             return;
           }

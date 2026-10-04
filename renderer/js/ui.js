@@ -62,6 +62,17 @@ export function statusRow({ level, iconName, title, desc, tag, right, testid }) 
   );
 }
 
+// 이름이 있는 '점검 중' 줄/카드
+export function pendingRow({ title, desc, testid }) {
+  return h('div', { class: 'row pending tone-info', 'data-testid': testid },
+    h('div', { class: 'ic' }, h('span', { class: 'spinner', 'aria-hidden': 'true' })),
+    h('div', { class: 'tx' }, h('strong', {}, title), desc ? h('span', {}, desc) : null),
+    h('span', { class: 'tag pending' }, '점검 중'));
+}
+export function pendingCard(title, desc) {
+  return h('section', { class: 'panel rows' }, pendingRow({ title, desc }));
+}
+
 export function hero({ level, title, titleEmph, desc, iconName, right }) {
   const t = h('h1', {});
   if (titleEmph) {

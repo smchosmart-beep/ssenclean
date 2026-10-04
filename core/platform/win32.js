@@ -1,5 +1,5 @@
 'use strict';
-// 실제 Windows 어댑터. 관리자 권한 없이 동작하는 API만 사용한다.
+// 실제 Windows 어댑터. 기본은 일반 권한으로 동작하고, 관리자 권한이 필요한 작업만 Windows 확인 창(elevate-win)을 거친다.
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
@@ -7,6 +7,7 @@ const native = require('./native');
 const { runPowerShell, psQuote, run, launch } = require('./exec');
 const { createChromeUpdater } = require('./google-update');
 const networkWin = require('./network-win');
+const { runElevated } = require('./elevate-win');
 
 function createWin32Platform({ electron }) {
   const { shell, app, net } = electron;
@@ -56,22 +57,15 @@ function createWin32Platform({ electron }) {
   // probePassword=false면 암호 유무 확인(빈 암호 로그인 1회 시도)을 하지 않는다.
   // 실패한 로그인은 계정 잠금 횟수에 들어가므로 호출하는 쪽에서 하루 1회 이하로 제한한다.
   async function accountInfo({ probePassword = true } = {}) {
-    const isDomain = user.domain && user.computer && user.domain.toUpperCase() !== user.computer.toUpperCase();
-    let type = 'unknown';
-    if (isDomain) type = 'domain';
-    else {
-      // PC를 Microsoft 계정으로 로그인하면 이 키 아래에 계정 항목이 생긴다.
-      const msa = reg.subkeys('HKCU\\Software\\Microsoft\\IdentityCRL\\UserExtendedProperties');
-      type = msa && msa.length > 0 ? 'microsoft' : 'local';
-    }
+    // PC를 Microsoft 계정으로 로그인하면 이 키 아래에 계정 항목이 생긴다.
+    const msa = reg.subkeys('HKCU\\Software\\Microsoft\\IdentityCRL\\UserExtendedProperties');
+    const type = msa && msa.length > 0 ? 'microsoft' : 'local';
     let hasPw = null;
     let ageDays = null;
-    if (type !== 'domain') {
-      if (probePassword) hasPw = native.hasPassword(user.name);
-      const age = native.passwordAgeSeconds(user.name);
-      if (age != null) ageDays = Math.floor(age / 86400);
-    }
-    return { type, userName: user.name, hasPassword: hasPw, probed: !!probePassword && type !== 'domain', passwordAgeDays: type === 'local' ? ageDays : null };
+    if (probePassword) hasPw = native.hasPassword(user.name);
+    const age = native.passwordAgeSeconds(user.name);
+    if (age != null) ageDays = Math.floor(age / 86400);
+    return { type, userName: user.name, hasPassword: hasPw, probed: !!probePassword, passwordAgeDays: type === 'local' ? ageDays : null };
   }
 
   async function changePassword(oldPw, newPw) {
@@ -184,7 +178,13 @@ ConvertTo-Json -InputObject @($r) -Depth 5 -Compress`, { timeoutMs: 45000 });
     tasks,
     windowsUpdate,
     chromeUpdate: createChromeUpdater(),
-    network: { adapters: networkWin.adapters, apply: networkWin.apply, connectivity: networkWin.connectivity },
+    network: { adapters: networkWin.adapters, apply: networkWin.apply, applyElevated: (cfg) => networkWin.applyElevated(cfg, runElevated), connectivity: networkWin.connectivity },
+    elevated: (ops) => runElevated(ops),
+    // 더블클릭과 같은 방식(ShellExecute)으로 실행: 관리자 권한이 필요한 프로그램이면 Windows 확인 창이 뜬다
+    shellRun: async (file, args) => {
+      const r = await runPowerShell(`try { Start-Process -FilePath ${psQuote(file)}${args ? ` -ArgumentList ${psQuote(args)}` : ''} -ErrorAction Stop; @{ ok = $true } | ConvertTo-Json -Compress } catch { @{ ok = $false } | ConvertTo-Json -Compress }`, { timeoutMs: 60000 });
+      return !!(r && r.ok);
+    },
     clipboard: { write: (t) => electron.clipboard.writeText(String(t)), read: () => electron.clipboard.readText() },
     fetchJson,
     exists: (p) => { try { fs.accessSync(p); return true; } catch { return false; } },

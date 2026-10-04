@@ -1,6 +1,6 @@
 'use strict';
 // C드라이브 정리. C드라이브의 큰 동영상·설치파일을 찾아 지우거나(휴지통) 다른 드라이브로 옮긴다.
-// 옮기기는 항상 되돌릴 수 있고, 원래 자리에 바로가기를 남길 수 있다.
+// 옮기기는 항상 되돌릴 수 있고, 바탕화면에 '○드라이브로 옮긴 파일' 폴더 바로가기를 하나만 만든다.
 const fs = require('fs');
 const path = require('path');
 
@@ -14,7 +14,7 @@ const MIN_INSTALLER = 5 * MB;
 const MOVE_ROOT = 'C드라이브에서 옮긴 파일';
 // C:\ 바로 아래에서 건너뛰는 폴더(Windows·프로그램·시스템 영역)
 const SKIP_TOP = new Set(['windows', 'program files', 'program files (x86)', 'programdata', '$recycle.bin', '$winreagent', '$windows.~bt', '$windows.~ws', 'system volume information',
-  'recovery', 'perflogs', 'msocache', 'config.msi', 'windows.old', 'intel', 'amd', 'nvidia', 'drivers', 'onedrivetemp', 'boot', 'efi', 'documents and settings', '_trash', '_d']);
+  'recovery', 'perflogs', 'msocache', 'config.msi', 'windows.old', 'intel', 'amd', 'nvidia', 'drivers', 'onedrivetemp', 'boot', 'efi', 'documents and settings', '_trash']);
 const SKIP_USERS = new Set(['default', 'default user', 'all users', 'defaultapppool']);
 const SKIP_ANY = new Set(['appdata', 'node_modules', '.git']);
 
@@ -24,6 +24,13 @@ function levelOf(d) {
   if (pct < 10 || d.free < 10 * GB) return 'danger';
   if (pct < 15 || d.free < 20 * GB) return 'warn';
   return 'ok';
+}
+
+// 같은 파일 묶음 키: 이름 끝의 (1)·복사본 표시를 떼고 크기까지 같으면 같은 파일로 본다
+function dupKey(name, size) {
+  const ext = path.extname(name).toLowerCase();
+  const base = name.slice(0, name.length - ext.length).replace(/\s*(\(\d+\)|- 복사본|복사본|사본|copy)$/i, '').trim().toLowerCase();
+  return `${base}${ext}|${size}`;
 }
 
 function uniquePath(p) {
@@ -78,7 +85,12 @@ function createCdriveService({ platform, store, emit = () => {} }) {
     let recycle = null;
     try { recycle = platform.recycleBin.query(sysRoot); } catch { recycle = null; }
     const hist = history();
+    const prefs = store.read('cdrive-prefs.json', {});
+    const fixed = others.filter((d) => !d.removable).sort((a, b) => b.free - a.free);
     return {
+      prefs: { sort: prefs.sort || 'old', target: prefs.target || null, whySeen: !!prefs.whySeen, desktopLink: prefs.desktopLink !== false },
+      recommended: fixed.length ? fixed[0].letter : (others[0] ? others[0].letter : null),
+      lastScan: store.read('cdrive-last.json', null),
       system: sys ? { ...sys, name: `${sys.letter}드라이브`, level: levelOf(sys), freePct: Math.round((sys.free / sys.total) * 100) } : null,
       others,
       recycle,
@@ -101,6 +113,7 @@ function createCdriveService({ platform, store, emit = () => {} }) {
     };
     const downloads = path.resolve(P.downloads).toLowerCase();
     const usersDir = path.resolve(path.dirname(home)).toLowerCase();
+    const otherRoots = new Set(disks().filter((d) => !isSys(d)).map((d) => path.resolve(d.root).toLowerCase()));
 
     async function walk(dir, depth) {
       if (stopFlag) return;
@@ -124,6 +137,7 @@ function createCdriveService({ platform, store, emit = () => {} }) {
           try { isFile = (await fs.promises.stat(p)).isFile(); } catch { continue; }
           if (!isFile) continue;
         } else if (e.isDirectory()) {
+          if (otherRoots.has(path.resolve(p).toLowerCase())) continue;
           if (depth === 0 && (SKIP_TOP.has(low) || low.startsWith('$'))) continue;
           if (lowDir === usersDir && SKIP_USERS.has(low)) continue;
           if (SKIP_ANY.has(low) || low.startsWith('.')) continue;
@@ -149,6 +163,9 @@ function createCdriveService({ platform, store, emit = () => {} }) {
       emit('cdrive:event', { type: 'start' });
       await walk(sysRoot, 0);
       found.sort((a, b) => b.size - a.size);
+      const groups = new Map();
+      for (const f of found) { const k = dupKey(f.name, f.size); groups.set(k, (groups.get(k) || 0) + 1); }
+      for (const f of found) { const n = groups.get(dupKey(f.name, f.size)); if (n > 1) f.dup = n; }
       results = found;
       const summary = { at: Date.now(), count: found.length, bytes: found.reduce((n, f) => n + f.size, 0), stopped: stopFlag };
       store.write('cdrive-last.json', summary);
@@ -203,7 +220,30 @@ function createCdriveService({ platform, store, emit = () => {} }) {
     }
   }
 
-  async function move({ paths, target, shortcut = true } = {}) {
+  function savePrefs(patch) { store.update('cdrive-prefs.json', {}, (p) => ({ ...p, ...patch })); return true; }
+
+  const linkPath = (letter) => path.join(P.desktop, `${letter}드라이브로 옮긴 파일.lnk`);
+  // 바탕화면에 옮긴 파일 폴더 바로가기를 하나만 만든다(이미 있으면 그대로)
+  function ensureDesktopLink(disk) {
+    const lp = linkPath(disk.letter);
+    if (fs.existsSync(lp)) return lp;
+    try {
+      return platform.shell.writeShortcut(lp, 'create', { target: path.join(disk.root, MOVE_ROOT), description: `C드라이브에서 ${disk.letter}드라이브로 옮긴 파일` }) ? lp : null;
+    } catch { return null; }
+  }
+  function countFiles(dir) {
+    let n = 0;
+    let ents; try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return 0; }
+    for (const e of ents) n += e.isDirectory() ? countFiles(path.join(dir, e.name)) : 1;
+    return n;
+  }
+  function removeEmptyDirs(dir) {
+    let ents; try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) if (e.isDirectory()) removeEmptyDirs(path.join(dir, e.name));
+    try { if (!fs.readdirSync(dir).length) fs.rmdirSync(dir); } catch { /* not empty */ }
+  }
+
+  async function move({ paths, target, desktopLink = true } = {}) {
     const items = known(paths);
     const disk = disks().find((d) => d.letter === target && !isSys(d));
     if (!items.length || !disk) return { ok: false, code: 'bad-request' };
@@ -224,20 +264,22 @@ function createCdriveService({ platform, store, emit = () => {} }) {
           if (pct !== lastPct) { lastPct = pct; emit('cdrive:event', { type: 'move', index: i + 1, total: items.length, name: it.name, percent: pct }); }
         });
         doneBytes += it.size;
-        let link = null;
-        if (shortcut) {
-          const lp = uniquePath(it.path + '.lnk');
-          try { if (platform.shell.writeShortcut(lp, 'create', { target: dest, description: `${disk.letter}드라이브로 옮긴 파일` })) link = lp; } catch { /* 바로가기 없이 진행 */ }
-        }
-        log.moves.push({ from: it.path, to: dest, size: it.size, link });
+        log.moves.push({ from: it.path, to: dest, size: it.size });
         results = results.filter((r) => r.path !== it.path);
       } catch (e) {
         const reason = e && e.code === 'STOPPED' ? 'stopped' : e && (e.code === 'EBUSY' || e.code === 'EPERM' || e.code === 'EACCES') ? 'locked' : e && e.code === 'ENOSPC' ? 'no-space' : 'error';
         log.failed.push({ path: it.path, name: it.name, reason });
       }
     }
-    if (log.moves.length) store.write(path.join('cdrive-undo', `${log.id}.json`), log);
+    let link = null;
+    if (log.moves.length) {
+      if (desktopLink) link = ensureDesktopLink(disk);
+      log.desktopLink = link;
+      store.write(path.join('cdrive-undo', `${log.id}.json`), log);
+    }
+    savePrefs({ target: disk.letter, desktopLink: !!desktopLink });
     return {
+      link: link ? path.basename(link, '.lnk') : null,
       ok: true, logId: log.moves.length ? log.id : null, target: disk.letter, folder: base,
       moved: log.moves.length, bytes: log.moves.reduce((n, m) => n + m.size, 0),
       failed: log.failed.map((f) => ({ name: f.name, reason: f.reason })),
@@ -286,6 +328,13 @@ function createCdriveService({ platform, store, emit = () => {} }) {
     }
     log.undoneAt = Date.now();
     store.write(rel, log);
+    // 그 드라이브에 옮긴 파일이 하나도 남지 않으면 빈 폴더와 바탕화면 바로가기도 지운다
+    const disk = disks().find((d) => d.letter === log.target);
+    if (disk) {
+      const root = path.join(disk.root, MOVE_ROOT);
+      removeEmptyDirs(root);
+      if (!countFiles(root)) { try { fs.unlinkSync(linkPath(disk.letter)); } catch { /* none */ } }
+    }
     return { ok: true, restored, skipped };
   }
 
@@ -302,7 +351,7 @@ function createCdriveService({ platform, store, emit = () => {} }) {
     return true;
   }
 
-  return { status, scan, stop, results: () => results, move, remove, emptyRecycle, history, undo, openFolder, reveal, levelOf, MOVE_ROOT };
+  return { savePrefs, status, scan, stop, results: () => results, move, remove, emptyRecycle, history, undo, openFolder, reveal, levelOf, MOVE_ROOT };
 }
 
 module.exports = { createCdriveService, levelOf, MOVE_ROOT };

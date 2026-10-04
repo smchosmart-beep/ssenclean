@@ -19,8 +19,8 @@ const MENUS = [
   { id: 'screensaver', label: '화면보호기', icon: 'monitor', view: screensaver },
   { id: 'updates', label: '업데이트', icon: 'up', view: updates },
   { id: 'cdrive', label: 'C드라이브 정리', icon: 'disk', view: cdrive },
-  { id: 'desktop', label: '바탕화면 정리', icon: 'folder', view: desktop },
   { id: 'browser', label: '브라우저 청소', icon: 'globe', view: browser },
+  { id: 'desktop', label: '바탕화면 정리', icon: 'folder', view: desktop },
   { id: 'network', label: 'IP 주소', icon: 'network', view: network },
 ];
 const HIDDEN = { settings: { id: 'settings', view: settings }, uninstall: { id: 'cdrive', view: cdrive } };
@@ -33,14 +33,14 @@ function renderNav() {
   const nav = document.getElementById('nav');
   nav.replaceChildren(...MENUS.map((m) => {
     const b = btn(m.icon, m.label, () => go(m.id), { variant: current === m.id ? 'on' : '', testid: `nav-${m.id}` });
-    if (dots[m.id]) b.append(h('span', { class: `dot ${dots[m.id]}`, title: dots[m.id] === 'ok' ? '문제없음' : '확인 필요' }));
+    if (dots[m.id]) b.append(h('span', { class: `dot ${dots[m.id]}`, title: dots[m.id] === 'ok' ? '문제없음' : dots[m.id] === 'pending' ? '점검 중' : '확인 필요' }));
     if (current === m.id) b.setAttribute('aria-current', 'page');
     return b;
   }));
 }
 
 export function setDot(id, level) {
-  dots[id] = ['danger', 'warn', 'ok'].includes(level) ? level : null;
+  dots[id] = ['danger', 'warn', 'ok', 'pending'].includes(level) ? level : null;
   renderNav();
 }
 

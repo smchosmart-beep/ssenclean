@@ -1,6 +1,6 @@
 import { h, btn, api, hero, pageHead, tip, toast, modal, fmtDate } from '../ui.js';
 
-const ACCOUNT = { local: '이 PC 전용 계정', microsoft: 'Microsoft 계정 (이메일로 로그인)', domain: '학교에서 관리하는 계정', unknown: '확인할 수 없어요' };
+const ACCOUNT = { local: '이 PC 전용 계정', microsoft: 'Microsoft 계정 (이메일로 로그인)', unknown: '확인할 수 없어요' };
 const ERR = {
   'wrong-password': '지금 쓰는 암호가 맞지 않아요.',
   policy: '학교 규칙에 맞지 않는 암호예요. 더 길거나 예전에 쓰지 않은 암호로 해 주세요.',
@@ -67,8 +67,7 @@ export default async function passwordView(ctx) {
       h('dt', {}, '암호'), h('dd', { 'data-testid': 'pw-has' }, st.hasPassword === true ? '있음' : st.hasPassword === false ? '⚠ 없음' : '확인할 수 없어요'));
 
     const actions = h('div', { class: 'btn-row', style: { marginTop: '18px' } });
-    if (st.accountType === 'domain') actions.append(tip('학교에서 관리하는 계정이에요. 암호는 정보 담당 선생님께 문의하세요.', 'info'));
-    else if (st.accountType === 'microsoft') {
+    if (st.accountType === 'microsoft') {
       actions.append(btn('open', 'Microsoft 계정 암호 바꾸러 가기', () => api('password:openMicrosoft'), { variant: 'primary', testid: 'pw-ms' }));
     } else if (st.canChangeHere) {
       actions.append(btn('key', st.hasPassword === false ? '암호 만들기' : '암호 바꾸기', async () => { if (await openForm(st)) render(); }, { variant: 'primary', testid: 'pw-open-form' }));

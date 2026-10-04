@@ -3,10 +3,11 @@ import { h, btn, api, onEvent, statusRow, hero, pageHead, tip, toast, confirmDia
 const LEVEL = { 3: 'danger', 2: 'warn', 1: 'warn' };
 const TYPE_LABEL = { rrn: '주민번호', frn: '외국인번호', passport: '여권번호', license: '운전면허번호', account: '계좌번호', phone: '전화번호', email: '이메일' };
 const TYPE_ORDER = ['rrn', 'frn', 'passport', 'license', 'account', 'phone', 'email'];
+const ISSUE_SHORT = { locked: '암호 걸린 파일', unreadable: '열 수 없는 파일', scanned: '스캔 문서', 'skipped-large': '너무 큰 파일', 'skipped-cloud': '클라우드에만 있는 파일' };
 const ISSUE_TEXT = {
   locked: '암호가 걸렸거나 배포용이라 열 수 없어요',
   unreadable: '파일이 손상됐거나 읽을 수 없어요',
-  scanned: '글자가 없는 스캔 PDF예요 (다음 버전에서 지원)',
+  scanned: '글자가 없는 스캔 문서라 읽을 수 없어요',
   'skipped-large': '너무 커서 건너뛰었어요 (100MB 초과)',
   'skipped-cloud': '클라우드에만 있는 파일이라 건너뛰었어요',
 };
@@ -21,6 +22,7 @@ export default async function privacyView(ctx) {
   const selected = new Set();
   let focus = null;
   let secure = false;
+  let showIssues = false;
 
   if (state && state.results) state.results.filter((r) => r.status === 'found').forEach((r) => selected.add(r.path));
   const box = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '14px' } });
@@ -186,9 +188,17 @@ export default async function privacyView(ctx) {
       renderFooter();
     }
     if (iss.length && !state.running) {
-      out.push(h('section', { class: 'panel' },
-        h('div', { style: { padding: '16px 24px 4px' }, class: 'section-title' }, `확인하지 못한 파일 ${iss.length}개`),
-        h('div', { class: 'rows' }, iss.slice(0, 50).map((r) => statusRow({ level: 'info', iconName: 'file', title: r.name, desc: `${r.where} · ${ISSUE_TEXT[r.status] || '확인할 수 없어요'}`, tag: '확인 불가' })))));
+      const byReason = {};
+      for (const r of iss) byReason[r.status] = (byReason[r.status] || 0) + 1;
+      const summary = Object.entries(byReason).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${ISSUE_SHORT[k] || '확인할 수 없는 파일'} ${n}개`).join(' · ');
+      out.push(h('section', { class: 'panel', 'data-testid': 'issues-panel' },
+        h('div', { style: { padding: '16px 24px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' } },
+          h('div', { style: { flex: '1', minWidth: '240px' } },
+            h('div', { class: 'section-title', style: { marginBottom: '2px' } }, `확인하지 못한 파일 ${iss.length}개`),
+            h('div', { class: 'muted small' }, summary)),
+          btn(showIssues ? 'x' : 'eye', showIssues ? '접기' : '자세히 보기', () => { showIssues = !showIssues; render(); }, { testid: 'issues-toggle' })),
+        showIssues ? h('div', { class: 'rows', style: { borderTop: '1px solid var(--hairline)' } }, iss.slice(0, 200).map((r) => statusRow({ level: 'info', iconName: 'file', title: r.name, desc: `${r.where} · ${ISSUE_TEXT[r.status] || '확인할 수 없어요'}`, tag: '확인 불가' })),
+          iss.length > 200 ? h('div', { class: 'muted small', style: { padding: '12px 24px' } }, `… 외 ${iss.length - 200}개`) : null) : null));
     }
     return out;
   }
