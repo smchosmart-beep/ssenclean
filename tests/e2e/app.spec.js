@@ -34,7 +34,7 @@ const mockLog = () => app.evaluate(() => global.__sen.platform._log());
 test('대시보드: 문제 순서대로 카드가 채워진다', async () => {
   await expect(win.getByTestId('dash-hero')).toContainText('해결할 일이', { timeout: 20000 });
   const rows = win.getByTestId('dash-rows').locator('.row:not(.skeleton)');
-  await expect(rows).toHaveCount(7, { timeout: 20000 });
+  await expect(rows).toHaveCount(8, { timeout: 20000 });
   await expect(rows.nth(0)).toHaveClass(/tone-danger/);
   await expect(win.getByTestId('dash-password')).toContainText('PC암호가 없어요');
   await expect(win.getByTestId('nav-password').locator('.dot')).toHaveClass(/danger/);
@@ -167,11 +167,66 @@ test('브라우저 청소: 광고 치료 → 기록 지우기', async () => {
   await expect(win.locator('.toast').last()).toContainText('비웠어요');
 });
 
+test('IP 주소: 교사 - 내 IP 복사 → 받은 메시지 붙여넣기 → 바꾸기 → 원래대로', async () => {
+  await win.getByTestId('nav-network').click();
+  await expect(win.getByTestId('net-hero')).toContainText('10.20.3.42', { timeout: 15000 });
+  await win.getByTestId('net-room').fill('3학년 2반');
+  await win.getByTestId('net-copy').click();
+  await expect.poll(() => app.evaluate(() => global.__sen.platform._state().clipboard)).toContain('[쎈클린 IP 정보] 3학년 2반');
+  await shot('09-network-mine');
+  // 정보부장이 보낸 메시지가 클립보드에 있다고 치고 [받은 내용 붙여넣기]
+  await app.evaluate(() => { global.__sen.platform.clipboard.write('[쎈클린 IP 변경] 3학년 2반\nIP 10.20.3.77 / 서브넷 255.255.255.0 / 게이트웨이 10.20.3.1\nDNS 10.20.0.1, 10.20.0.2'); });
+  await win.getByTestId('net-paste-btn').click();
+  await expect(win.getByTestId('net-ip')).toHaveValue('10.20.3.77');
+  await expect(win.getByTestId('net-gateway')).toHaveValue('10.20.3.1');
+  // 잘못 고치면 막는다
+  await win.getByTestId('net-gateway').fill('10.20.9.1');
+  await win.getByTestId('net-apply').click();
+  await expect(win.locator('.field-err').filter({ hasText: '앞자리가 달라요' })).toBeVisible();
+  await win.getByTestId('net-gateway').fill('10.20.3.1');
+  await win.getByTestId('net-apply').click();
+  await win.getByTestId('confirm-ok').click();
+  await expect(win.getByTestId('net-result')).toContainText('IP를 바꿨어요');
+  await expect(win.getByTestId('net-hero')).toContainText('10.20.3.77');
+  await shot('10-network-changed');
+  await win.getByTestId('net-undo').click();
+  await win.getByTestId('confirm-ok').click();
+  await expect(win.getByTestId('net-hero')).toContainText('10.20.3.42');
+});
+
+test('IP 주소: 정보부장 - 받은 내용 저장 → 교실 목록 → IP 배정 메시지', async () => {
+  await win.getByTestId('open-settings').click();
+  await win.locator('select.sel').first().selectOption('admin');
+  await win.getByTestId('nav-network').click();
+  await win.getByTestId('tab-registry').click();
+  // 교사가 보낸 메시지(앞 테스트에서 복사한 내용 형식)
+  await app.evaluate(() => { global.__sen.platform.clipboard.write('[쎈클린 IP 정보] 3학년 2반\nPC이름 SM-3-2\nIP 10.20.3.42 / 서브넷 255.255.255.0 / 게이트웨이 10.20.3.1\nDNS 10.20.0.1, 10.20.0.2\nMAC 00-1A-2B-3C-4D-5E\n방식 고정 IP'); });
+  await win.getByTestId('reg-paste-save').click();
+  await app.evaluate(() => { global.__sen.platform.clipboard.write('[쎈클린 IP 정보] 3학년 1반\nPC이름 SM-3-1\nIP 10.20.3.41 / 서브넷 255.255.255.0 / 게이트웨이 10.20.3.1\nMAC AA-BB-CC-DD-EE-01'); });
+  await win.getByTestId('reg-paste-save').click();
+  await expect(win.getByTestId('reg-item')).toHaveCount(2);
+  await win.getByTestId('def-dns1').fill('10.20.0.1');
+  await win.getByTestId('def-save').click();
+  const two = win.getByTestId('reg-item').filter({ hasText: '3학년 2반' });
+  await two.getByTestId('reg-assign').click();
+  await win.getByTestId('as-ip').fill('10.20.3.41');
+  await win.getByTestId('as-make').click();
+  await expect(win.locator('.modal h2').last()).toContainText('이미 쓰고 있는 IP예요');
+  await win.getByTestId('confirm-cancel').click();
+  await win.getByTestId('as-ip').fill('10.20.3.50');
+  await win.getByTestId('as-make').click();
+  await expect(win.getByTestId('as-message')).toContainText('IP 10.20.3.50 / 서브넷 255.255.255.0 / 게이트웨이 10.20.3.1');
+  await expect.poll(() => app.evaluate(() => global.__sen.platform._state().clipboard)).toContain('[쎈클린 IP 변경] 3학년 2반');
+  await win.keyboard.press('Escape');
+  await expect(two).toContainText('변경 대기 → 10.20.3.50');
+  await shot('11-network-registry');
+});
+
 test('설정 화면과 콘솔 오류 없음', async () => {
   await win.getByTestId('open-settings').click();
   await expect(win.locator('.page-title')).toHaveText('설정');
   await win.getByTestId('nav-dashboard').click();
-  await expect(win.getByTestId('dash-rows').locator('.row:not(.skeleton)')).toHaveCount(7, { timeout: 20000 });
+  await expect(win.getByTestId('dash-rows').locator('.row:not(.skeleton)')).toHaveCount(8, { timeout: 20000 });
   await shot('08-dashboard-after');
   expect(errors).toEqual([]);
 });

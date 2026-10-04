@@ -33,6 +33,8 @@ function createStore(dir) {
     desktop: { scope: 'old', olderThanMonths: 3, groupBy: 'semester-type', finds: { installers: true, duplicates: true, brokenShortcuts: true, privacy: true } },
     privacyRoots: null,
     manualPasswordDate: null,
+    role: 'user',
+    room: '',
   };
   const settings = {
     get: () => ({ ...DEFAULT_SETTINGS, ...read('settings.json', {}), desktop: { ...DEFAULT_SETTINGS.desktop, ...(read('settings.json', {}).desktop || {}) } }),

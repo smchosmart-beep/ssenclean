@@ -1,6 +1,6 @@
 'use strict';
 // 대시보드 카드. 각 항목을 따로 점검해서 끝나는 대로 화면에 채운다. spec 3장
-const ITEMS = ['password', 'screensaver', 'browser', 'updates', 'fonts', 'privacy', 'desktop'];
+const ITEMS = ['password', 'screensaver', 'browser', 'updates', 'fonts', 'privacy', 'network', 'desktop'];
 
 function fmtDate(t) { const d = new Date(t); return `${d.getMonth() + 1}월 ${d.getDate()}일`; }
 
@@ -67,6 +67,15 @@ function createDashboard(s) {
       if (!last) return card('privacy', 'info', '개인정보 파일 - 아직 검사하지 않았어요', '바탕화면·문서·다운로드 폴더를 검사해 보세요.', scan);
       if (last.files > 0) return card('privacy', last.danger > 0 ? 'danger' : 'warn', `개인정보 파일 ${last.files}개가 남아 있어요`, `지난 검사 ${fmtDate(last.at)}`, { kind: 'navigate', target: 'privacy', label: '확인하기', icon: 'file' });
       return card('privacy', 'ok', '개인정보 파일 - 0개', `지난 검사 ${fmtDate(last.at)}`, scan);
+    },
+    async network() {
+      const i = await s.network.info();
+      const go = { kind: 'navigate', target: 'network', label: '자세히', icon: 'link' };
+      if (!i.primary) return card('network', 'warn', '네트워크에 연결되어 있지 않아요', '랜선이나 와이파이 연결을 확인해 주세요.', go);
+      const c = await s.network.check();
+      const mode = i.primary.dhcp ? '자동 IP' : '고정 IP';
+      if (!c.internet) return card('network', 'warn', `IP ${i.primary.ip} - 인터넷 연결이 안 돼요`, `${mode} · IP 설정을 정보부장에게 확인해 보세요.`, { ...go, label: 'IP 확인' });
+      return card('network', 'info', `IP ${i.primary.ip}`, `${mode} · 인터넷 연결됨${i.room ? ` · ${i.room}` : ''}`, go);
     },
     async desktop() {
       const q = s.desktop.quickStatus();

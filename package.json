@@ -1,7 +1,7 @@
 {
   "name": "sen-clean",
   "productName": "쎈클린",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "교사 PC 안심 점검 도구",
   "main": "electron/main.js",
   "type": "commonjs",

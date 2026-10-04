@@ -80,6 +80,24 @@ app.whenReady().then(() => {
     return out;
   };
 
+  // 교실 IP 목록 CSV 내보내기·가져오기(파일 위치는 사용자가 고른다)
+  channels['registry:exportCsv'] = async () => {
+    const d = new Date();
+    const name = `교실IP목록_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.csv`;
+    const r = await dialog.showSaveDialog(win, { title: '교실 IP 목록 저장', defaultPath: path.join(platform.paths.documents, name), filters: [{ name: 'CSV(엑셀)', extensions: ['csv'] }] });
+    if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+    fs.writeFileSync(r.filePath, services.network.exportCsv(), 'utf8');
+    return { ok: true, path: r.filePath };
+  };
+  channels['registry:importCsv'] = async () => {
+    const r = await dialog.showOpenDialog(win, { title: '교실 IP 목록 가져오기', properties: ['openFile'], filters: [{ name: 'CSV(엑셀)', extensions: ['csv'] }] });
+    if (r.canceled || !r.filePaths.length) return { ok: false, canceled: true };
+    const buf = fs.readFileSync(r.filePaths[0]);
+    let text;
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch { text = new TextDecoder('euc-kr').decode(buf); }
+    return services.network.importCsv(text);
+  };
+
   Menu.setApplicationMenu(null);
 
   session.defaultSession.webRequest.onHeadersReceived((details, cb) => {

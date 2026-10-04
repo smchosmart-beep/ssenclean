@@ -13,6 +13,9 @@ const INVOKE = [
   'uninstall:open',
   'desktop:status', 'desktop:plan', 'desktop:apply', 'desktop:undo', 'desktop:history', 'desktop:openArchive',
   'browser:scan', 'browser:fix', 'browser:undo', 'browser:reset', 'browser:running', 'browser:close', 'browser:sizes', 'browser:clean',
+  'app:copy', 'app:paste',
+  'network:info', 'network:myMessage', 'network:parse', 'network:apply', 'network:validate', 'network:undo', 'network:check',
+  'registry:list', 'registry:import', 'registry:update', 'registry:delete', 'registry:defaults', 'registry:assign', 'registry:exportCsv', 'registry:importCsv',
 ];
 const EVENTS = ['privacy:event', 'desktop:progress', 'updates:progress'];
 

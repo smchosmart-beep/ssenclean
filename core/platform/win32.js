@@ -6,6 +6,7 @@ const fs = require('fs');
 const native = require('./native');
 const { runPowerShell, psQuote, run, launch } = require('./exec');
 const { createChromeUpdater } = require('./google-update');
+const networkWin = require('./network-win');
 
 function createWin32Platform({ electron }) {
   const { shell, app, net } = electron;
@@ -180,6 +181,8 @@ ConvertTo-Json -InputObject @($r) -Depth 5 -Compress`, { timeoutMs: 45000 });
     tasks,
     windowsUpdate,
     chromeUpdate: createChromeUpdater(),
+    network: { adapters: networkWin.adapters, apply: networkWin.apply, connectivity: networkWin.connectivity },
+    clipboard: { write: (t) => electron.clipboard.writeText(String(t)), read: () => electron.clipboard.readText() },
     fetchJson,
     exists: (p) => { try { fs.accessSync(p); return true; } catch { return false; } },
   };

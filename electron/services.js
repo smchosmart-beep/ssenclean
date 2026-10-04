@@ -11,6 +11,7 @@ const { createUninstallService } = require('../core/uninstall');
 const { createDesktopService } = require('../core/desktop');
 const { createBrowserService } = require('../core/browser');
 const { createDashboard } = require('../core/dashboard');
+const { createNetworkService } = require('../core/network');
 
 const ROOT = path.join(__dirname, '..');
 
@@ -39,6 +40,7 @@ function createServices({ platform, spawnScan, emit }) {
     uninstall: createUninstallService({ platform }),
     desktop: createDesktopService({ platform, store, scanPrivacy }),
     browser: createBrowserService({ platform, store, dataDir: path.join(ROOT, 'data') }),
+    network: createNetworkService({ platform, store }),
   };
   s.dashboard = createDashboard(s);
 
@@ -52,6 +54,8 @@ function createServices({ platform, spawnScan, emit }) {
       const allowed = {};
       if (patch && [30, 60, 90, 180].includes(patch.passwordCycleDays)) allowed.passwordCycleDays = patch.passwordCycleDays;
       if (patch && [5, 10, 15].includes(patch.screensaverMinutes)) allowed.screensaverMinutes = patch.screensaverMinutes;
+      if (patch && ['user', 'admin'].includes(patch.role)) allowed.role = patch.role;
+      if (patch && typeof patch.room === 'string') allowed.room = patch.room.trim().slice(0, 40);
       return store.settings.set(allowed);
     },
 
@@ -107,6 +111,22 @@ function createServices({ platform, spawnScan, emit }) {
     'browser:close': () => s.browser.closeBrowsers(),
     'browser:sizes': () => s.browser.historySizes(),
     'browser:clean': (o) => s.browser.cleanHistory(o || {}),
+
+    'app:copy': (text) => { platform.clipboard.write(String(text || '')); return true; },
+    'app:paste': () => platform.clipboard.read(),
+    'network:info': () => s.network.info(),
+    'network:myMessage': (room) => s.network.myMessage(room),
+    'network:parse': (text) => s.network.parse(String(text || '')),
+    'network:apply': (cfg) => s.network.apply(cfg || {}),
+    'network:validate': (cfg) => require('../core/network-msg').validate(cfg || {}),
+    'network:undo': () => s.network.undo(),
+    'network:check': () => s.network.check(),
+    'registry:list': () => s.network.registryList(),
+    'registry:import': (text) => s.network.registryImport(String(text || '')),
+    'registry:update': (o) => s.network.registryUpdate(o && o.id, o || {}),
+    'registry:delete': (id) => s.network.registryDelete(id),
+    'registry:defaults': (d) => s.network.setDefaults(d || {}),
+    'registry:assign': (o) => s.network.assign(o && o.id, o || {}),
   };
 
   // 앱 시작 때 할 일

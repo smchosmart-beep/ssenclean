@@ -214,6 +214,30 @@ function createMockPlatform({ root, seed = true } = {}) {
       },
       async openHelpViaOmnibox(exe) { log({ op: 'omnibox', exe }); return true; },
     },
+    network: {
+      async adapters() { return JSON.parse(JSON.stringify(state.network.adapters)); },
+      async apply(cfg) {
+        if (state.network.denied) return 'denied';
+        const a = state.network.adapters.find((x) => x.index === cfg.index);
+        if (!a) return 'error';
+        if (cfg.dhcp) Object.assign(a, { dhcp: true, ip: '192.168.0.77', prefix: 24, gateway: '192.168.0.1', dns: ['192.168.0.1'] });
+        else {
+          const p = require('../network-msg').maskToPrefix(cfg.mask);
+          Object.assign(a, { dhcp: false, ip: cfg.ip, prefix: p, gateway: cfg.gateway || '', dns: [cfg.dns1, cfg.dns2].filter(Boolean) });
+        }
+        save();
+        log({ op: 'netApply', cfg });
+        return 'ok';
+      },
+      async connectivity(gateway) {
+        const ok = (state.network.reachable || []).includes(gateway);
+        return { gateway: gateway ? ok : null, internet: ok };
+      },
+    },
+    clipboard: {
+      write: (t) => { state.clipboard = String(t); save(); },
+      read: () => state.clipboard || '',
+    },
     windowsUpdate: {
       lastInstalled: async () => state.windowsUpdate.lastInstalled,
       pendingCount: async () => state.windowsUpdate.pending,

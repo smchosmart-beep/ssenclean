@@ -130,6 +130,13 @@ function seedMock(root, P) {
     offline: false,
     chromeLatest: '141.0.7390.65',
     chromeUpdate: { available: true, version: '140.0.7339.128' },
+    network: {
+      reachable: ['10.20.3.1', '10.20.3.254'],
+      adapters: [
+        { index: 12, alias: '이더넷', desc: 'Realtek PCIe GbE Family Controller', mac: '00-1A-2B-3C-4D-5E', ip: '10.20.3.42', prefix: 24, gateway: '10.20.3.1', dns: ['10.20.0.1', '10.20.0.2'], dhcp: false, virtual: false, hardware: true, media: '802.3', wifi: false },
+        { index: 25, alias: 'vEthernet (Default Switch)', desc: 'Hyper-V Virtual Ethernet Adapter', mac: '00-15-5D-01-02-03', ip: '172.28.0.1', prefix: 20, gateway: '', dns: [], dhcp: false, virtual: true, hardware: false, media: '802.3', wifi: false },
+      ],
+    },
     windowsUpdate: { lastInstalled: new Date(Date.now() - 12 * DAY).toISOString(), pending: 0 },
     fileVersions: { [chromeExe]: '128.0.6613.120', [path.join(P.programFilesX86, 'Hnc', 'Office 2022', 'HOffice120', 'Bin', 'Hwp.exe')]: '12.0.0.3650' },
     signatures: {

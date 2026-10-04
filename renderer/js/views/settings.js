@@ -13,6 +13,7 @@ export default async function settingsView(ctx) {
     pageHead('설정', '학교 규칙에 맞게 기준을 바꿀 수 있어요.', btn('home', '점검 현황으로', () => ctx.go('dashboard'))),
     h('section', { class: 'panel pad' },
       h('div', { class: 'form', style: { gridTemplateColumns: '220px 1fr' } },
+        h('label', {}, '나는'), select([['user', '일반 사용자(교사)'], ['admin', '정보부장']], s.role, async (v) => { await api('settings:set', { role: v }); toast(v === 'admin' ? "정보부장으로 바꿨어요. [IP 주소]에 '교실 IP 관리'가 생겼어요" : '일반 사용자로 바꿨어요'); }),
         h('label', {}, 'PC암호 변경 주기'), select([[30, '30일'], [60, '60일'], [90, '90일 (3개월)'], [180, '180일']], s.passwordCycleDays, (v) => save({ passwordCycleDays: Number(v) })),
         h('label', {}, '화면보호기 대기 시간'), select([[5, '5분'], [10, '10분'], [15, '15분']], s.screensaverMinutes, (v) => save({ screensaverMinutes: Number(v) })))),
     h('section', { class: 'panel pad' }, h('div', { class: 'section-title' }, "개인정보 검사에서 '괜찮아요'로 뺀 파일"), exBox),

@@ -9,6 +9,7 @@ import uninstall from './views/uninstall.js';
 import desktop from './views/desktop.js';
 import browser from './views/browser.js';
 import settings from './views/settings.js';
+import network from './views/network.js';
 
 const MENUS = [
   { id: 'dashboard', label: '점검 현황', icon: 'home', view: dashboard },
@@ -20,6 +21,7 @@ const MENUS = [
   { id: 'uninstall', label: '프로그램 제거', icon: 'trash', view: uninstall },
   { id: 'desktop', label: '바탕화면 정리', icon: 'folder', view: desktop },
   { id: 'browser', label: '브라우저 청소', icon: 'globe', view: browser },
+  { id: 'network', label: 'IP 주소', icon: 'network', view: network },
 ];
 const HIDDEN = { settings: { id: 'settings', view: settings } };
 
