@@ -19,6 +19,35 @@ function runPowerShell(script, { timeoutMs = 30000 } = {}) {
   });
 }
 
+// 오래 걸리는 PowerShell 작업용: 한 줄에 JSON 하나씩 출력하면 onLine으로 바로 넘긴다.
+// 끝나면 마지막 JSON(없으면 null)으로 resolve.
+function runPowerShellLines(script, onLine, { timeoutMs = 15 * 60 * 1000 } = {}) {
+  return new Promise((resolve) => {
+    const full = `$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.Encoding]::UTF8;\nfunction Emit($o){[Console]::Out.WriteLine(($o|ConvertTo-Json -Compress));[Console]::Out.Flush()}\n${script}`;
+    const encoded = Buffer.from(full, 'utf16le').toString('base64');
+    let child;
+    try {
+      child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded], { windowsHide: true });
+    } catch { resolve(null); return; }
+    let buf = '';
+    let last = null;
+    const timer = setTimeout(() => { try { child.kill(); } catch { /* ignore */ } }, timeoutMs);
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (d) => {
+      buf += d;
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        if (!line) continue;
+        try { last = JSON.parse(line); onLine(last); } catch { /* 진행 출력이 아닌 줄 */ }
+      }
+    });
+    child.on('error', () => { clearTimeout(timer); resolve(null); });
+    child.on('close', () => { clearTimeout(timer); resolve(last); });
+  });
+}
+
 function psQuote(s) { return "'" + String(s).replace(/'/g, "''") + "'"; }
 
 function run(file, args = [], { timeoutMs = 15000 } = {}) {
@@ -39,4 +68,4 @@ function launch(file, args = []) {
   } catch { return false; }
 }
 
-module.exports = { runPowerShell, psQuote, run, launch };
+module.exports = { runPowerShell, runPowerShellLines, psQuote, run, launch };

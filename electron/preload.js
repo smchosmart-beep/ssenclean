@@ -14,7 +14,7 @@ const INVOKE = [
   'desktop:status', 'desktop:plan', 'desktop:apply', 'desktop:undo', 'desktop:history', 'desktop:openArchive',
   'browser:scan', 'browser:fix', 'browser:undo', 'browser:reset', 'browser:running', 'browser:close', 'browser:sizes', 'browser:clean',
 ];
-const EVENTS = ['privacy:event', 'desktop:progress'];
+const EVENTS = ['privacy:event', 'desktop:progress', 'updates:progress'];
 
 contextBridge.exposeInMainWorld('sen', {
   invoke(channel, arg) {

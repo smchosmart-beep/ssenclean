@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const native = require('./native');
 const { runPowerShell, psQuote, run, launch } = require('./exec');
+const { createChromeUpdater } = require('./google-update');
 
 function createWin32Platform({ electron }) {
   const { shell, app, net } = electron;
@@ -178,6 +179,7 @@ ConvertTo-Json -InputObject @($r) -Depth 5 -Compress`, { timeoutMs: 45000 });
     fileVersion,
     tasks,
     windowsUpdate,
+    chromeUpdate: createChromeUpdater(),
     fetchJson,
     exists: (p) => { try { fs.accessSync(p); return true; } catch { return false; } },
   };

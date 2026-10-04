@@ -41,15 +41,20 @@ function createDashboard(s) {
     },
     async updates() {
       const list = await s.updates.check();
-      const out = list.filter((u) => u.state === 'outdated');
+      const restart = list.find((u) => u.state === 'restart');
+      if (restart && list.filter((u) => u.state === 'outdated').length === 0) {
+        return card('updates', 'warn', '크롬을 다시 켜면 업데이트가 적용돼요', '업데이트를 받아 두었어요.', { kind: 'navigate', target: 'updates', label: '다시 켜기', icon: 'refresh' });
+      }
+      const out = list.filter((u) => u.state === 'outdated' || u.state === 'restart');
       const go = { kind: 'navigate', target: 'updates', label: '업데이트', icon: 'up' };
       if (out.length === 1) {
         const u = out[0];
-        return card('updates', 'warn', `${u.name} 업데이트가 있어요`, u.version ? `현재 ${u.version}` : (u.pending ? `설치할 업데이트 ${u.pending}개` : ''), go);
+        return card('updates', 'warn', `${u.name} 업데이트가 있어요`, u.pending ? `설치할 업데이트 ${u.pending}개` : (u.version ? `현재 ${u.version}` : ''), go);
       }
       if (out.length > 1) return card('updates', 'warn', `업데이트할 프로그램 ${out.length}개`, out.map((u) => u.name).join(', '), go);
       if (list.length && list.every((u) => u.state === 'latest')) return card('updates', 'ok', '업데이트 - 모두 최신이에요', list.map((u) => u.name).join(', '), null);
-      return card('updates', 'info', '업데이트 - 일부는 확인할 수 없어요', list.filter((u) => u.state === 'unknown').map((u) => u.name).join(', ') + ' 은(는) 직접 확인해 주세요.', { kind: 'navigate', target: 'updates', label: '자세히', icon: 'search' });
+      const latest = list.filter((u) => u.state === 'latest').map((u) => u.name);
+      return card('updates', 'ok', '업데이트 - 확인된 프로그램은 최신이에요', latest.length ? `${latest.join(', ')} 최신 · 나머지는 업데이트 메뉴에서 확인하세요` : '업데이트 메뉴에서 확인하세요', { kind: 'navigate', target: 'updates', label: '자세히', icon: 'search' });
     },
     async fonts() {
       const r = s.fonts.list();

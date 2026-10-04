@@ -1,6 +1,6 @@
 # 쎈클린 (SEN Clean) 1.0
 
-**[⬇ 설치파일 내려받기 (SenClean_Setup_1.0.0.exe, Windows 10·11 64비트)](https://github.com/smchosmart-beep/ssenclean/raw/downloads/SenClean_Setup_1.0.0.exe)**
+**[⬇ 설치파일 내려받기 (SenClean_Setup_1.0.1.exe, Windows 10·11 64비트)](https://github.com/smchosmart-beep/ssenclean/raw/downloads/SenClean_Setup_1.0.1.exe)**
 
 교사 PC의 개인정보 파일·폰트·PC암호·화면보호기·업데이트·바탕화면·브라우저 광고를 **한 화면에서 확인하고 버튼 하나로 해결**하는 Windows 설치형 도구입니다. 쎈(SEN) 제품군 4번째 프로그램입니다.
 
@@ -50,8 +50,8 @@ npm run dist
 
 `dist` 폴더에 두 파일이 생깁니다.
 
-- `SenClean_Setup_1.0.0.exe` — 설치파일. **사용자별 설치**(`%LOCALAPPDATA%\Programs\쎈클린`)라서 관리자 권한(UAC 창) 없이 설치됩니다.
-- `SenClean_1.0.0_portable.zip` — 무설치 버전
+- `SenClean_Setup_1.0.1.exe` — 설치파일. **사용자별 설치**(`%LOCALAPPDATA%\Programs\쎈클린`)라서 관리자 권한(UAC 창) 없이 설치됩니다.
+- `SenClean_1.0.1_portable.zip` — 무설치 버전
 
 > 리눅스·맥에서는 설치파일(NSIS)을 만들려면 Wine이 필요합니다. Windows에서 만드는 것을 권장합니다.
 
@@ -81,7 +81,7 @@ sen-clean/
 리눅스 개발 환경에서는 Windows API를 직접 실행할 수 없어서, 아래 항목은 **실제 학교 PC에서 확인**해야 합니다. 각 항목이 실패해도 프로그램은 멈추지 않고 "확인할 수 없어요"나 안내 문구로 대체되도록 만들어 두었습니다.
 
 ### 설치
-- [ ] `SenClean_Setup_1.0.0.exe`가 UAC 창 없이 설치되는지
+- [ ] `SenClean_Setup_1.0.1.exe`가 UAC 창 없이 설치되는지
 - [ ] SmartScreen 경고가 뜨는지 (뜨면 "추가 정보 → 실행" 안내 필요, 코드 서명 검토)
 - [ ] 교육청 백신이 쎈클린을 차단하지 않는지 (레지스트리·예약 작업을 다루므로 오탐 가능)
 
@@ -108,9 +108,11 @@ sen-clean/
 - [ ] 학교안심 글꼴 설치 후 한글 글꼴 목록에 보이는지
 
 ### 업데이트 (spec 14-6~9)
-- [ ] 크롬 [업데이트]가 '크롬 정보' 화면을 여는지 (안 열리면 안내 문구로 대체)
+- [x] 크롬 판정: 이 PC의 구글 업데이트(COM `GoogleUpdate.Update3WebMachine`)에 관리자 권한 없이 확인 가능 — 학교 PC 확인(상태 16)
+- [ ] 크롬 [업데이트] → 쎈클린 안에서 진행률 표시 → [크롬 다시 켜기] 후 탭이 복원되는지
 - [ ] Windows 대기 업데이트 개수가 나오는지 (PowerShell 차단 PC는 마지막 설치일만 표시)
-- [ ] 한글 버전이 나오는지, 한컴 업데이트 프로그램 경로가 맞는지 (`core/updates.js`의 `hancomUpdater` 후보 경로)
+- [x] 한컴 업데이트 프로그램: `Hnc\Office 2022\HncUtils\Service\HncUpdater.exe`, 관리자 권한 없이 실행됨 — 학교 PC 확인
+- [ ] 한글 버전이 Hwp.exe 실제 버전으로 나오는지
 - [ ] 학교 오피스가 Click-to-Run인지, [업데이트]가 오피스 업데이트 창을 여는지
 
 ### 바탕화면 정리
@@ -142,3 +144,11 @@ sen-clean/
 - **엑셀 읽기**: npm의 SheetJS(xlsx 0.18.5)에 보안 문제가 있어 쓰지 않고, xlsx·xls(BIFF8)·HTML로 저장된 xls를 읽는 코드를 직접 만들었습니다(`core/privacy/sheets.js`). 외부 라이브러리 보안 경고 0건입니다.
 - **PIN 행**: 관리자 권한 없이 확실하게 감지할 방법이 없어 1.0에서는 표시하지 않습니다(spec 6.2에서 허용한 대안).
 - **문서 검사는 별도 프로세스**(Electron utilityProcess)에서 돌아 큰 PDF를 읽어도 화면이 멈추지 않습니다. 패키징된 상태(ASAR)에서도 동작을 확인했습니다.
+
+## 9. 바뀐 내용
+
+### 1.0.1
+- **크롬 업데이트 판정**: 구글 서버의 최신 번호 대신 이 PC의 구글 업데이트에 직접 물어봅니다. 순차 배포 중인 버전 때문에 크롬은 "최신"인데 쎈클린만 "업데이트 있음"으로 나오던 문제를 고쳤습니다.
+- **크롬 [업데이트]**: 크롬 창만 열리던 문제를 고쳤습니다. 쎈클린 안에서 내려받기·설치 진행률을 보여주고, 끝나면 [크롬 다시 켜기](열린 탭 복원)를 누르면 됩니다. 구글 업데이트에 연결할 수 없는 PC에서는 크롬 주소창에 크롬 정보 주소를 대신 넣어 줍니다.
+- **학교 정책**: 크롬 업데이트를 정책으로 끈 PC는 "학교에서 관리"로 표시합니다.
+- **한글 [업데이트 확인]**: 한컴 업데이트 프로그램(`HncUpdater.exe`)의 실제 위치를 찾아 실행합니다. 못 찾으면 [업데이트 방법] 안내를 보여줍니다. 버전은 Hwp.exe의 실제 버전을 읽습니다.

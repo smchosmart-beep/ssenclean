@@ -189,24 +189,99 @@ test('화면보호기: 꺼짐 → 안전 설정 → 되돌리기, 정책 관리'
   assert.strictEqual(svc.secureSetup().code, 'managed');
 });
 
-test('업데이트: 크롬 구버전·한글·오피스·오프라인', async (t) => {
+test('업데이트: 크롬은 이 PC의 구글 업데이트 답을 따른다', async (t) => {
   const env = freshEnv();
   t.after(env.cleanup);
   assert.strictEqual(cmpVersion('128.0.6613.120', '141.0.7390.65'), -1);
-  assert.strictEqual(cmpVersion('141.0.7390.65', '141.0.7390.65'), 0);
+  const st = env.platform._state();
   const svc = createUpdateService(env);
-  let list = await svc.check();
-  const by = Object.fromEntries(list.map((u) => [u.id, u]));
-  assert.strictEqual(by.chrome.state, 'outdated');
-  assert.strictEqual(by.windows.state, 'latest');
-  assert.strictEqual(by.hangul.version, '12.0.0.3345');
-  assert.strictEqual(by.office.clickToRun, true);
+  const chrome = async () => (await svc.check()).find((u) => u.id === 'chrome');
+
+  // 구글 업데이트가 '최신'이라고 하면, 서버 최신 번호가 더 높아도 최신으로 본다(학교 PC 오판 사례).
+  st.chromeUpdate.available = false;
+  let c = await chrome();
+  assert.strictEqual(c.state, 'latest');
+  assert.strictEqual(c.via, 'updater');
+
+  // 받을 업데이트가 있으면 '업데이트 있음' + 새 버전
+  st.chromeUpdate.available = true;
+  c = await chrome();
+  assert.strictEqual(c.state, 'outdated');
+  assert.strictEqual(c.latest, '140.0.7339.128');
+});
+
+test('업데이트: 크롬 업데이트 진행률 → 다시 켜기', async (t) => {
+  const env = freshEnv();
+  t.after(env.cleanup);
+  const events = [];
+  const svc = createUpdateService({ ...env, emit: (ch, p) => events.push(p) });
   const r = await svc.run('chrome');
+  assert.ok(r.inline);
+  assert.strictEqual((await svc.check()).find((u) => u.id === 'chrome').state, 'updating');
+  await waitFor(() => events.some((e) => e.final));
+  const phases = events.map((e) => e.phase);
+  assert.ok(phases.includes('downloading') && phases.includes('installing'));
+  assert.ok(events.some((e) => e.phase === 'downloading' && e.percent === 100));
+  assert.strictEqual(events[events.length - 1].phase, 'done');
+  assert.strictEqual((await svc.check()).find((u) => u.id === 'chrome').state, 'restart');
+  // 다시 켜기: 크롬을 정상 종료 요청 후 탭 복원 옵션으로 실행
+  const rr = await svc.run('chrome');
+  assert.ok(rr.ok);
+  const log = env.platform._log();
+  assert.ok(log.some((l) => l.op === 'close' && l.image === 'chrome.exe'));
+  assert.ok(log.some((l) => l.op === 'launch' && /chrome\.exe$/.test(l.file) && l.args.includes('--restore-last-session')));
+  assert.strictEqual((await svc.check()).find((u) => u.id === 'chrome').state, 'latest');
+});
+
+test('업데이트: 구글 업데이트를 못 쓰면 주소창 대체, 서버 번호는 2판 이상 뒤처질 때만', async (t) => {
+  const env = freshEnv();
+  t.after(env.cleanup);
+  const st = env.platform._state();
+  st.chromeUpdate.unavailable = true;
+  const events = [];
+  const svc = createUpdateService({ ...env, emit: (ch, p) => events.push(p) });
+  let c = (await svc.check()).find((u) => u.id === 'chrome');
+  assert.strictEqual(c.via, 'server');
+  assert.strictEqual(c.state, 'outdated', '128 vs 141: 크게 뒤처짐');
+  st.chromeLatest = '129.0.1.1';
+  c = (await svc.check()).find((u) => u.id === 'chrome');
+  assert.strictEqual(c.state, 'unknown', '한 판 차이는 순차 배포일 수 있음');
+  await svc.run('chrome');
+  await waitFor(() => events.some((e) => e.final));
+  assert.strictEqual(events[events.length - 1].phase, 'opened');
+  assert.ok(env.platform._log().some((l) => l.op === 'omnibox'));
+});
+
+test('업데이트: 학교 정책으로 크롬 업데이트를 끈 PC', async (t) => {
+  const env = freshEnv();
+  t.after(env.cleanup);
+  env.platform.reg.write('HKLM\\SOFTWARE\\Policies\\Google\\Update', 'UpdateDefault', 4, 0);
+  const svc = createUpdateService(env);
+  assert.strictEqual((await svc.check()).find((u) => u.id === 'chrome').state, 'managed');
+});
+
+test('업데이트: 한글은 실제 업데이트 프로그램 경로와 Hwp.exe 버전', async (t) => {
+  const env = freshEnv();
+  t.after(env.cleanup);
+  const svc = createUpdateService(env);
+  const hg = (await svc.check()).find((u) => u.id === 'hangul');
+  assert.strictEqual(hg.version, '12.0.0.3650', '설치 목록 번호가 아니라 Hwp.exe 버전');
+  assert.strictEqual(hg.hasUpdater, true);
+  const r = await svc.run('hangul');
   assert.ok(r.ok);
-  assert.ok(env.platform._log().some((l) => l.op === 'launch' && l.args[0] === 'chrome://settings/help'));
-  env.platform._state().offline = true;
-  list = await svc.check();
-  assert.strictEqual(list.find((u) => u.id === 'chrome').state, 'unknown');
+  assert.ok(env.platform._log().some((l) => l.op === 'launch' && /Office 2022[\\/]HncUtils[\\/]Service[\\/]HncUpdater\.exe$/.test(l.file)));
+  fs.unlinkSync(path.join(env.platform.paths.programFilesX86, 'Hnc', 'Office 2022', 'HncUtils', 'Service', 'HncUpdater.exe'));
+  const hg2 = (await svc.check()).find((u) => u.id === 'hangul');
+  assert.strictEqual(hg2.hasUpdater, false);
+  assert.ok((await svc.run('hangul')).howto, '못 찾으면 방법 안내');
+});
+
+test('업데이트: Windows·오피스', async (t) => {
+  const env = freshEnv();
+  t.after(env.cleanup);
+  const list = await createUpdateService(env).check();
+  assert.strictEqual(list.find((u) => u.id === 'windows').state, 'latest');
+  assert.strictEqual(list.find((u) => u.id === 'office').clickToRun, true);
 });
 
 test('바탕화면: 학기 계산', () => {

@@ -161,7 +161,12 @@ function createMockPlatform({ root, seed = true } = {}) {
         return true;
       },
     },
-    launch: (file, args) => { log({ op: 'launch', file, args }); return true; },
+    launch: (file, args) => {
+      log({ op: 'launch', file, args });
+      // 실제 크롬처럼, 다시 켜면 받아 둔 업데이트(new_chrome.exe)를 적용한다.
+      if (/chrome\.exe$/i.test(file)) { try { fs.unlinkSync(path.join(path.dirname(file), 'new_chrome.exe')); } catch { /* none */ } }
+      return true;
+    },
     run: async (file, args) => { log({ op: 'run', file, args }); return { ok: true, code: 0, stdout: '', stderr: '' }; },
     processes: async () => state.processes.map((s) => s.toLowerCase()),
     requestClose: async (image) => { state.processes = state.processes.filter((p) => p.toLowerCase() !== image.toLowerCase()); save(); log({ op: 'close', image }); },
@@ -179,6 +184,28 @@ function createMockPlatform({ root, seed = true } = {}) {
       },
       remove: async (p, name) => { state.tasks = state.tasks.filter((x) => !(x.path === p && x.name === name)); save(); return true; },
       register: async (p, name, xml) => { state.tasks.push(JSON.parse(xml)); save(); return true; },
+    },
+    chromeUpdate: {
+      async check() {
+        const c = state.chromeUpdate || {};
+        if (c.unavailable) return { phase: 'unavailable' };
+        return c.available ? { phase: 'available', version: c.version } : { phase: 'latest', version: null };
+      },
+      async install(onProgress) {
+        const c = state.chromeUpdate || {};
+        if (c.unavailable) return { phase: 'unavailable' };
+        if (!c.available) { onProgress({ phase: 'latest' }); return { phase: 'latest' }; }
+        const steps = [{ phase: 'checking' }, { phase: 'available', version: c.version }, { phase: 'downloading', percent: 30 }, { phase: 'downloading', percent: 100 }, { phase: 'installing', percent: 60 }, { phase: 'done', version: c.version }];
+        for (const st of steps) { await new Promise((r) => setTimeout(r, 60)); onProgress(st); }
+        // 크롬이 쓰는 방식대로 새 실행 파일을 남겨 '다시 켜야 적용' 상태를 만든다.
+        const dir = path.join(paths.programFiles, 'Google', 'Chrome', 'Application');
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, 'new_chrome.exe'), 'exe');
+        c.available = false; c.installedVersion = c.version; save();
+        log({ op: 'chromeInstall' });
+        return { phase: 'done', version: c.version };
+      },
+      async openHelpViaOmnibox(exe) { log({ op: 'omnibox', exe }); return true; },
     },
     windowsUpdate: {
       lastInstalled: async () => state.windowsUpdate.lastInstalled,

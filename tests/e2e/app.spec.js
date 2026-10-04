@@ -105,12 +105,23 @@ test('PC암호: 만들기 → D-day', async () => {
   await expect(win.getByTestId('nav-password').locator('.dot')).toHaveClass(/ok/);
 });
 
-test('업데이트: 크롬 구버전 표시와 공식 업데이트 실행', async () => {
+test('업데이트: 크롬을 쎈클린 안에서 업데이트 → 다시 켜기, 한글 업데이트 프로그램', async () => {
   await win.getByTestId('nav-updates').click();
-  await expect(win.getByTestId('upd-row-chrome')).toContainText('업데이트 있음', { timeout: 20000 });
+  const row = win.getByTestId('upd-row-chrome');
+  await expect(row).toContainText('업데이트 있음', { timeout: 20000 });
+  await expect(row).toContainText('새 버전 140.0.7339.128');
   await shot('05-updates');
   await win.getByTestId('upd-chrome').click();
-  await expect.poll(async () => (await mockLog()).some((l) => l.op === 'launch' && (l.args || [])[0] === 'chrome://settings/help')).toBeTruthy();
+  await expect(row).toContainText('다시 켜야 적용', { timeout: 15000 });
+  await shot('05b-updates-restart');
+  await win.getByTestId('upd-chrome').click();
+  await expect(row).toContainText('최신', { timeout: 15000 });
+  const log = await mockLog();
+  expect(log.some((l) => l.op === 'chromeInstall')).toBeTruthy();
+  expect(log.some((l) => l.op === 'launch' && (l.args || []).includes('--restore-last-session'))).toBeTruthy();
+  await expect(win.getByTestId('upd-row-hangul')).toContainText('12.0.0.3650');
+  await win.getByTestId('upd-hangul').click();
+  await expect.poll(async () => (await mockLog()).some((l) => l.op === 'launch' && /HncUpdater\.exe$/.test(l.file))).toBeTruthy();
 });
 
 test('프로그램 제거: 제어판 창 열기', async () => {
@@ -145,8 +156,11 @@ test('브라우저 청소: 광고 치료 → 기록 지우기', async () => {
   const link = JSON.parse(fs.readFileSync(path.join(root, 'Users', 'teacher', 'Desktop', 'Chrome.lnk'), 'utf8'));
   expect(link.args).toBe('');
   await win.getByTestId('tab-history').click();
-  await win.getByTestId('close-browsers').click();
-  await win.getByTestId('confirm-ok').click();
+  await expect(win.getByTestId('h-clean')).toBeVisible();
+  if (await win.getByTestId('close-browsers').count()) {
+    await win.getByTestId('close-browsers').click();
+    await win.getByTestId('confirm-ok').click();
+  }
   await win.getByTestId('h-clean').click();
   await win.getByTestId('confirm-ok').click();
   await expect(win.locator('.toast').last()).toContainText('비웠어요');

@@ -85,6 +85,11 @@ function seedMock(root, P) {
     sysFonts['Sandoll System (TrueType)'] = { type: REG.SZ, value: 'SandollSystem.ttf' };
   }
 
+  // ── 한컴오피스 ──
+  const hncUpdater = path.join(P.programFilesX86, 'Hnc', 'Office 2022', 'HncUtils', 'Service', 'HncUpdater.exe');
+  const hwpExe = path.join(P.programFilesX86, 'Hnc', 'Office 2022', 'HOffice120', 'Bin', 'Hwp.exe');
+  write(hncUpdater, 'MZ'); write(hwpExe, 'MZ');
+
   // ── 광고 프로그램 흔적 ──
   const shopAlarm = path.join(P.localAppData, 'ShopAlarm', 'shopalarm.exe');
   const shopUpd = path.join(P.localAppData, 'ShopAlarm', 'update.exe');
@@ -124,8 +129,9 @@ function seedMock(root, P) {
     cloudOnly: [],
     offline: false,
     chromeLatest: '141.0.7390.65',
+    chromeUpdate: { available: true, version: '140.0.7339.128' },
     windowsUpdate: { lastInstalled: new Date(Date.now() - 12 * DAY).toISOString(), pending: 0 },
-    fileVersions: { [chromeExe]: '128.0.6613.120' },
+    fileVersions: { [chromeExe]: '128.0.6613.120', [path.join(P.programFilesX86, 'Hnc', 'Office 2022', 'HOffice120', 'Bin', 'Hwp.exe')]: '12.0.0.3650' },
     signatures: {
       [shopAlarm]: { signed: false, company: '', created: new Date(Date.now() - 9 * DAY).toISOString() },
       [shopUpd]: { signed: false, company: '', created: new Date(Date.now() - 9 * DAY).toISOString() },

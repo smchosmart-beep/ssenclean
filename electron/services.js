@@ -35,7 +35,7 @@ function createServices({ platform, spawnScan, emit }) {
     fonts: createFontService({ platform, store, dataDir: path.join(ROOT, 'data'), assetsDir: path.join(ROOT, 'assets') }),
     password: createPasswordService({ platform, store }),
     screensaver: createScreensaverService({ platform, store }),
-    updates: createUpdateService({ platform }),
+    updates: createUpdateService({ platform, emit }),
     uninstall: createUninstallService({ platform }),
     desktop: createDesktopService({ platform, store, scanPrivacy }),
     browser: createBrowserService({ platform, store, dataDir: path.join(ROOT, 'data') }),
