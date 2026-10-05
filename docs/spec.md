@@ -544,7 +544,7 @@ C드라이브가 꽉 차면 PC가 느려진다는 것을 모르는 교사가 많
 
 ---
 
-## 11-A. 메뉴 9 — IP 주소 · PC 사양 (1.5.0 이후 변경)
+## 11-A. 메뉴 9 — IP 주소 · PC 사양 (1.6.0)
 
 - **불러오기는 수동**: 화면에 들어오거나 점검 현황을 열 때 IP를 읽지 않는다. [불러오기]/[다시 불러오기]를 누를 때만 IP·연결 상태·PC 사양을 읽고 `pc-info.json`에 저장해 두었다가 다음에 그대로 보여 준다("○월 ○일 00:00에 불러옴"). IP를 바꾸거나 [원래대로] 하면 저장한 IP도 새 값으로.
 - **PC 사양**(일반 권한 PowerShell CIM): PC 모델(Win32_ComputerSystem), CPU(Win32_Processor), RAM 합계 + 모듈별 크기×개수·제조사(JEDEC 코드 → 삼성·SK하이닉스 등)·부품번호·속도(Win32_PhysicalMemory), SSD/HDD 모델·용량(Get-PhysicalDisk, USB 제외, 없으면 Win32_DiskDrive), 모니터 모델(root\wmi WmiMonitorID, 이름이 없으면 제조사 + 제품코드), 프린터 모델(Win32_Printer 드라이버 이름, PDF·XPS·팩스·원노트 등 가상 프린터 제외, 기본 프린터 표시). 여러 개는 ` / `로 잇는다. 사양을 못 읽어도 IP는 보여 준다.

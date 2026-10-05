@@ -1,6 +1,6 @@
 # 쎈Clean (SEN Clean) 1.0
 
-**[⬇ 설치파일 내려받기 (SenClean_Setup_1.5.0.exe, Windows 10·11 64비트)](https://github.com/smchosmart-beep/ssenclean/raw/downloads/SenClean_Setup_1.5.0.exe)**
+**[⬇ 설치파일 내려받기 (SenClean_Setup_1.6.0.exe, Windows 10·11 64비트)](https://github.com/smchosmart-beep/ssenclean/raw/downloads/SenClean_Setup_1.6.0.exe)**
 
 교사 PC의 개인정보 파일·폰트·PC암호·화면보호기·업데이트·C드라이브·브라우저 광고·바탕화면·IP 주소를 **한 화면에서 확인하고 버튼 하나로 해결**하는 Windows 설치형 도구입니다. 쎈(SEN) 제품군 4번째 프로그램입니다.
 
@@ -50,7 +50,7 @@ npm run dist
 
 `dist` 폴더에 두 파일이 생깁니다.
 
-- `SenClean_Setup_1.5.0.exe` — 설치파일. **사용자별 설치**(`%LOCALAPPDATA%\Programs\쎈Clean`)라서 관리자 권한(UAC 창) 없이 설치됩니다.
+- `SenClean_Setup_1.6.0.exe` — 설치파일. **사용자별 설치**(`%LOCALAPPDATA%\Programs\쎈Clean`)라서 관리자 권한(UAC 창) 없이 설치됩니다.
 - `SenClean_1.0.2_portable.zip` — 무설치 버전
 
 > 리눅스·맥에서는 설치파일(NSIS)을 만들려면 Wine이 필요합니다. Windows에서 만드는 것을 권장합니다.
@@ -81,7 +81,7 @@ sen-clean/
 리눅스 개발 환경에서는 Windows API를 직접 실행할 수 없어서, 아래 항목은 **실제 학교 PC에서 확인**해야 합니다. 각 항목이 실패해도 프로그램은 멈추지 않고 "확인할 수 없어요"나 안내 문구로 대체되도록 만들어 두었습니다.
 
 ### 설치
-- [ ] `SenClean_Setup_1.5.0.exe`가 UAC 창 없이 설치되는지
+- [ ] `SenClean_Setup_1.6.0.exe`가 UAC 창 없이 설치되는지
 - [ ] 쎈클린 1.3.0이 설치된 PC에 설치하면 프로그램 목록에 '쎈Clean' 하나만 남고, 설정·되돌리기 기록이 그대로인지
 - [ ] SmartScreen 경고가 뜨는지 (뜨면 "추가 정보 → 실행" 안내 필요, 코드 서명 검토)
 - [ ] 교육청 백신이 쎈Clean을 차단하지 않는지 (레지스트리·예약 작업을 다루므로 오탐 가능)
@@ -181,7 +181,7 @@ sen-clean/
 
 ## 9. 바뀐 내용
 
-### 다음 버전 (설치파일 미배포)
+### 1.6.0
 - **IP 주소 수동 불러오기**: 화면에 들어오거나 점검 현황을 열 때 IP를 읽지 않음. [불러오기]를 누를 때만 읽고, 불러온 값을 저장해 두었다가 다시 보여 줌.
 - **PC 사양**: IP와 함께 PC 모델·CPU·RAM·SSD·모니터·프린터 모델명을 읽어 보여 주고, [정보부장에게 보낼 내용 복사]에 함께 들어감.
 - **교실 IP·PC 대장**: 정보부장이 메시지를 붙여넣으면 IP와 사양이 대장에 자동 기록. 목록에 사양 한 줄, 모델명으로 찾기, CSV에 사양 열 추가.
