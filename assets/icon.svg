@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect x="40" y="40" width="944" height="944" rx="210" fill="#1E3932"/>
+  <!-- 모니터 -->
+  <rect x="222" y="268" width="580" height="392" rx="52" fill="#F2F0EB"/>
+  <rect x="464" y="652" width="96" height="74" fill="#F2F0EB"/>
+  <rect x="342" y="716" width="340" height="60" rx="30" fill="#F2F0EB"/>
+  <!-- 점검 완료 체크 -->
+  <path d="M388 468 L478 556 L640 392" fill="none" stroke="#00754A" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 반짝임 -->
+  <path d="M800 150 C812 214 830 232 894 244 C830 256 812 274 800 338 C788 274 770 256 706 244 C770 232 788 214 800 150 Z" fill="#F2F0EB"/>
+  <path d="M184 150 C190 182 199 191 231 197 C199 203 190 212 184 244 C178 212 169 203 137 197 C169 191 178 182 184 150 Z" fill="#F2F0EB" opacity=".9"/>
+</svg>
