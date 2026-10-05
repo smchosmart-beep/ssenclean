@@ -277,7 +277,7 @@ body { font: 300 16px/1.55 "Cafe24 PRO Slim", "Hakgyoansim Jayeon", sans-serif; 
 
 ## Logo
 
-- `assets/logo.svg`: "쎈"은 가나초콜릿 글꼴 윤곽선, "Clean"은 Poppins Bold 윤곽선(임시, 가나초콜릿 영문으로 바꿀 예정). 색은 `brand #006241`
+- `assets/logo.svg`: 가나초콜릿 글꼴의 "쎈Clean"을 윤곽선으로 변환한 SVG, 색은 `brand #006241`
 - `assets/icon.svg`·`icon.ico`·`icon.png`: 쎈PDF·쎈Cut·쎈img와 같은 앱 아이콘 규칙 — 진한 초록(#1E3932) 둥근 네모 + 크림(#F2F0EB) 그림(모니터) + 초록(#00754A) 체크. 16~32px에서는 반짝임 장식 생략
 - 헤더 높이 34px 기준으로 넣고, 오른쪽에 버전(13px 회색)을 둔다.
 

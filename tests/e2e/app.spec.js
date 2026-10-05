@@ -89,9 +89,14 @@ test('폰트: 사용 주의 정리 → 되돌리기, 미리보기 폰트 로드'
   await expect(win.getByTestId('font-item')).toHaveCount(3, { timeout: 15000 });
   await expect.poll(() => win.evaluate(() => [...document.fonts].filter((f) => f.family.startsWith('sf-') && f.status === 'loaded').length), { timeout: 10000 }).toBeGreaterThan(0);
   await shot('03-fonts');
+  await expect(win.getByTestId('fonts-clean-top')).toBeInViewport(); // 맨 위에도 실행 버튼
+  await expect(win.getByTestId('fonts-clean')).toBeInViewport(); // 아래 막대는 화면 아래 고정
+  await expect(win.getByTestId('fonts-select-all')).toBeChecked();
   await win.getByTestId('fonts-clean').click();
   await win.getByTestId('confirm-ok').click(); // 열린 프로그램 없음 → 바로 정리 확인
   await expect(win.locator('.hero h1')).toContainText('정리할 폰트가 없어요');
+  await expect(win.getByTestId('fonts-archive-note')).toContainText('쎈Clean 폰트 보관함');
+  expect(fs.readdirSync(path.join(root, '_D', '쎈Clean 폰트 보관함')).length).toBe(1);
   expect((await mockLog()).some((l) => l.op === 'elevated' && (l.ops || []).includes('regDelete'))).toBeTruthy(); // PC 전체 폰트는 확인 창을 거침
   await win.getByTestId('fonts-undo').click();
   await expect(win.locator('.hero h1')).toContainText('사용 주의 폰트');
@@ -132,6 +137,7 @@ test('업데이트: 크롬을 쎈Clean 안에서 업데이트 → 다시 켜기,
   expect(log.some((l) => l.op === 'chromeInstall')).toBeTruthy();
   expect(log.some((l) => l.op === 'launch' && (l.args || []).includes('--restore-last-session'))).toBeTruthy();
   await expect(win.getByTestId('upd-row-hangul')).toContainText('12.0.0.3650');
+  await expect(win.getByTestId('upd-hangul')).toHaveText('업데이트 열기');
   await win.getByTestId('upd-hangul').click();
   await expect(win.locator('.toast').last()).toContainText('업데이트 창을 열었어요', { timeout: 10000 });
   await expect.poll(async () => (await mockLog()).some((l) => l.op === 'openPath' && /HncUpdater\.exe$/.test(l.path))).toBeTruthy();
@@ -205,7 +211,20 @@ test('바탕화면 정리: 미리보기 → 정리 → 되돌리기', async () =
   await win.getByTestId('desktop-preview').click();
   await expect(win.getByTestId('desktop-tree')).toBeVisible({ timeout: 30000 });
   await shot('06-desktop-preview');
+  // 미리보기에서 고치기: 폴더 펼치기 → 한 파일은 그대로 두기 → 폴더 이름 바꾸기
+  const folder = win.getByTestId('desktop-folder').filter({ hasText: '학생·학급' }).first();
+  await folder.locator('.linkish').click();
+  const firstFile = win.getByTestId('desktop-file').first();
+  const keptName = (await firstFile.locator('.fname').textContent()).trim();
+  await firstFile.getByTestId('desktop-file-check').uncheck();
+  await win.getByTestId('desktop-folder').filter({ hasText: '기타' }).first().getByTestId('desktop-rename').click();
+  await win.getByTestId('name-input').fill('방과후');
+  await win.getByTestId('name-ok').click();
+  await expect(win.getByTestId('desktop-tree')).toContainText('방과후');
   await win.getByTestId('desktop-apply').click();
+  await expect(win.getByTestId('desktop-undo')).toBeVisible();
+  expect(fs.existsSync(path.join(D, keptName))).toBeTruthy(); // 그대로 두기로 한 파일
+  expect(fs.readdirSync(path.join(D, '바탕화면 보관함'), { recursive: true }).some((p) => String(p).includes('방과후'))).toBeTruthy();
   await expect(win.locator('.hero h1')).toContainText('바탕화면을 정리했어요');
   expect(fs.existsSync(path.join(D, '바탕화면 보관함'))).toBeTruthy();
   expect(fs.existsSync(path.join(D, 'Chrome.lnk'))).toBeTruthy();

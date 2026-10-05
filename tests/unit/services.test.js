@@ -9,7 +9,7 @@ const { createFontService } = require('../../core/fonts/service');
 const { createPasswordService } = require('../../core/password');
 const { createScreensaverService } = require('../../core/screensaver');
 const { createUpdateService, cmpVersion } = require('../../core/updates');
-const { createDesktopService, semesterOf } = require('../../core/desktop');
+const { createDesktopService, semesterOf, schoolYearOf, topicOf, similarBase } = require('../../core/desktop');
 const { createBrowserService } = require('../../core/browser');
 
 test('개인정보: 검사·미리보기·제외·지우기·잠긴 파일', async (t) => {
@@ -316,17 +316,22 @@ test('바탕화면: 미리보기·정리·되돌리기', async (t) => {
   const svc = createDesktopService({ ...env, scanPrivacy });
   const D = env.platform.paths.desktop;
   const before = fs.readdirSync(D).sort();
-  const plan = await svc.plan({ scope: 'old', olderThanMonths: 3, groupBy: 'semester-type' });
+  const plan = await svc.plan({ scope: 'old', olderThanMonths: 3, groupBy: 'semester-type' }); // 예전 설정 → 최근 2주 제외·학년도›하는 일
+  assert.strictEqual(plan.options.groupBy, 'year-topic');
+  assert.strictEqual(plan.options.keepDays, 14);
   assert.ok(plan.moveCount > 5);
   assert.ok(!plan.moves.some((m) => m.name.endsWith('.lnk') || m.name.endsWith('.url')), '바로가기는 옮기지 않음');
   assert.ok(!plan.moves.some((m) => m.name === '메모.txt'), '최근 파일은 그대로');
-  assert.ok(plan.tree.length >= 2);
+  assert.ok(plan.tree.children.length >= 1 && plan.tree.children.every((n) => /학년도$/.test(n.label)));
+  const flat = (n) => [n, ...n.children.flatMap(flat)];
+  const nodes = plan.tree.children.flatMap(flat);
+  assert.ok(nodes.some((n) => n.label === '학생·학급'));
   assert.ok(plan.extras.installers.some((x) => x.name === 'HncSetup_2024.exe'));
   assert.ok(plan.extras.extracted.some((x) => x.name === '수업자료 모음.zip'));
   assert.ok(plan.extras.duplicates.some((x) => x.name === '현장학습 사진 - 복사본.jpg'));
   assert.ok(plan.extras.broken.some((x) => x.name === '옛날 프로그램.lnk'));
   assert.ok(plan.privacy.some((x) => x.name === '3학년 2반 명단.xlsx'));
-  assert.ok(plan.tree.some((n) => n.privacy > 0), '미리보기에 개인정보 표시');
+  assert.ok(nodes.some((n) => n.privacy > 0), '미리보기에 개인정보 표시');
 
   // 계획에 없는 경로는 지우지 않는다
   const memo = path.join(D, '메모.txt');
@@ -356,10 +361,10 @@ test('바탕화면: 이름이 겹치면 (2)를 붙인다', async (t) => {
   const D = env.platform.paths.desktop;
   fs.mkdirSync(path.join(D, '바탕화면 보관함'), { recursive: true });
   fs.writeFileSync(path.join(D, '바탕화면 보관함', '메모.txt'), 'old');
-  const plan = await svc.plan({ scope: 'all', groupBy: 'none', finds: { installers: false, duplicates: false, brokenShortcuts: false, privacy: false } });
+  const plan = await svc.plan({ scope: 'all', groupBy: 'topic', finds: { installers: false, duplicates: false, brokenShortcuts: false, privacy: false } });
   const memo = plan.moves.find((m) => m.name === '메모.txt');
   assert.ok(memo);
-  const res = await svc.apply({ planId: plan.id });
+  const res = await svc.apply({ planId: plan.id, overrides: { [memo.id]: { folder: '' } } }); // 미리보기에서 보관함 바로 아래로
   assert.ok(fs.existsSync(path.join(D, '바탕화면 보관함', '메모 (2).txt')));
   await svc.undo(res.logId);
   assert.ok(fs.existsSync(path.join(D, '메모.txt')));
@@ -426,4 +431,88 @@ test('브라우저: 이 PC 전체 시작 프로그램(HKLM)도 확인 창을 거
   const u = await svc.undo();
   assert.ok(u.ok);
   assert.strictEqual(env.platform.reg.read(approved, 'MyWebSearch'), undefined);
+});
+
+test('폰트 보관함: D드라이브 날짜 폴더에 복사·목록 파일, 복사 실패 시 정리 안 함, 1.3.0 백업 옮기기', async (t) => {
+  const env = freshEnv();
+  t.after(env.cleanup);
+  const svc = createFontService(env);
+  const l = svc.list();
+  const user = l.items.filter((i) => i.class === 'caution' && i.scope === 'user');
+  const root = path.join(env.platform.paths.dDrive, '쎈Clean 폰트 보관함');
+  assert.strictEqual(l.archivePath, root);
+  const r = await svc.clean([user[0].id]);
+  assert.ok(r.results[0].ok);
+  const days = fs.readdirSync(root);
+  assert.strictEqual(days.length, 1);
+  const dayDir = path.join(root, days[0]);
+  assert.ok(fs.existsSync(path.join(dayDir, user[0].fileName)), '원래 파일 이름 그대로');
+  const txt = fs.readFileSync(path.join(dayDir, '정리한 폰트 목록.txt'), 'utf8');
+  assert.ok(txt.includes(user[0].name));
+  assert.strictEqual(svc.list().archive.count, 1);
+
+  // 보관함에 복사할 수 없으면 정리하지 않는다
+  const orig = fs.copyFileSync;
+  fs.copyFileSync = () => { throw new Error('disk full'); };
+  try {
+    const r2 = await svc.clean([user[1].id]);
+    assert.deepStrictEqual(r2.results[0], { id: user[1].id, ok: false, reason: 'backup' });
+    assert.ok(fs.existsSync(user[1].file));
+  } finally { fs.copyFileSync = orig; }
+
+  // 보관함 파일로 되돌리기, 파일이 없으면 안내
+  const u = await svc.undo(r.batchId);
+  assert.ok(u.ok && u.restored === 1);
+
+  // 1.3.0 방식(AppData) 백업 옮기기
+  const old = path.join(env.store.dir, 'font-backup', '1');
+  fs.mkdirSync(old, { recursive: true });
+  fs.writeFileSync(path.join(old, '0_old.ttf'), 'fontdata');
+  env.store.write('font-undo.json', [{ id: '1', at: Date.now(), entries: [{ scope: 'user', name: '옛폰트', regName: 'x', regValue: 'x', file: path.join(env.platform.paths.userFonts, 'old.ttf'), backup: path.join(old, '0_old.ttf') }] }]);
+  const m = svc.migrateBackups();
+  assert.strictEqual(m.moved, 1);
+  assert.ok(!fs.existsSync(path.join(env.store.dir, 'font-backup')), 'C드라이브의 예전 백업 폴더 삭제');
+  const moved = env.store.read('font-undo.json', [])[0].entries[0].backup;
+  assert.ok(moved.startsWith(root) && fs.existsSync(moved) && path.basename(moved) === 'old.ttf');
+});
+
+test('바탕화면: 학년도·하는 일·비슷한 이름', () => {
+  assert.strictEqual(schoolYearOf(new Date(2026, 1, 28).getTime()), '2025학년도');
+  assert.strictEqual(schoolYearOf(new Date(2026, 2, 1).getTime()), '2026학년도');
+  assert.strictEqual(topicOf('현장체험학습 안내.hwp'), '행사', '긴 낱말(체험학습)이 우선');
+  assert.strictEqual(topicOf('5학년 수업 계획.hwp'), '수업', '같은 길이면 위쪽(수업)');
+  assert.strictEqual(topicOf('IMG_0001.jpg'), '사진·영상');
+  assert.strictEqual(topicOf('메모.txt'), '기타');
+  for (const n of ['가정통신문_1.hwp', '가정통신문_2(수정).hwp', '가정통신문_최종.hwp', '가정통신문 (3).hwp']) assert.strictEqual(similarBase(n), '가정통신문');
+  assert.strictEqual(similarBase('교사별_출석현황_20250906_163240.xls'), '교사별_출석현황');
+});
+
+test('바탕화면: 비슷한 이름 3개 이상 묶기, 미리보기에서 그대로 두기·폴더 바꾸기·이름 바꾸기', async (t) => {
+  const env = freshEnv();
+  t.after(env.cleanup);
+  const D = env.platform.paths.desktop;
+  const old = new Date(Date.now() - 60 * 86400000);
+  for (const n of ['가정통신문_1.hwp', '가정통신문_2(수정).hwp', '가정통신문_최종.hwp', '연수 이수증 2.pdf', '방과후 강사 명단.xlsx', '잡동사니.txt']) {
+    fs.writeFileSync(path.join(D, n), n); fs.utimesSync(path.join(D, n), old, old);
+  }
+  const svc = createDesktopService({ ...env, scanPrivacy: async () => new Map() });
+  const plan = await svc.plan({ scope: 'recent', keepDays: 14, groupBy: 'topic', finds: { installers: false, duplicates: false, brokenShortcuts: false, privacy: false } });
+  const by = Object.fromEntries(plan.moves.map((m) => [m.name, m]));
+  assert.deepStrictEqual(by['가정통신문_1.hwp'].folders, ['학생·학급', '가정통신문']);
+  assert.ok(by['가정통신문_최종.hwp'].similar);
+  assert.deepStrictEqual(by['잡동사니.txt'].folders, ['기타']);
+  assert.ok(!by['메모.txt'], '최근 2주 안에 고친 파일은 그대로');
+  const res = await svc.apply({
+    planId: plan.id,
+    overrides: { [by['연수 이수증 2.pdf'].id]: { keep: true }, [by['방과후 강사 명단.xlsx'].id]: { folder: '기타' } },
+    renames: { 기타: '방과후' },
+  });
+  assert.strictEqual(res.kept, 1);
+  const A = path.join(D, '바탕화면 보관함');
+  assert.ok(fs.existsSync(path.join(D, '연수 이수증 2.pdf')), '그대로 두기');
+  assert.ok(fs.existsSync(path.join(A, '방과후', '방과후 강사 명단.xlsx')), '폴더 바꾸기 + 이름 바꾸기');
+  assert.ok(fs.existsSync(path.join(A, '방과후', '잡동사니.txt')));
+  assert.ok(fs.existsSync(path.join(A, '학생·학급', '가정통신문', '가정통신문_최종.hwp')));
+  const u = await svc.undo(res.logId);
+  assert.strictEqual(u.restored, res.moved);
 });

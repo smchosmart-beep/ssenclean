@@ -50,7 +50,9 @@ export default async function browserView(ctx) {
   }
 
   let footerEl = null;
+  let heroSlot = null;
   function renderFooter() {
+    if (heroSlot) heroSlot.replaceChildren(selected.size ? btn('broom', `한 번에 치료하기 (${selected.size})`, fix, { variant: 'primary', testid: 'ad-fix-top' }) : null);
     if (!footerEl) return;
     const admin = scan.items.some((i) => i.admin && selected.has(i.id));
     footerEl.replaceChildren(
@@ -71,6 +73,7 @@ export default async function browserView(ctx) {
 
   function renderAds() {
     footerEl = null;
+    heroSlot = h('span', { class: 'btn-row' });
     const fixable = scan.items.filter((i) => i.fixable);
     const info = scan.items.filter((i) => !i.fixable);
     const adware = scan.items.filter((i) => i.verdict === 'adware').length;
@@ -81,12 +84,12 @@ export default async function browserView(ctx) {
         title: scan.items.length ? '광고 흔적을 {}찾았어요' : '광고 흔적을 찾지 못했어요',
         titleEmph: scan.items.length ? `${scan.items.length}개 ` : null,
         desc: scan.items.length ? '항목마다 왜 의심되는지 적어 두었어요.' : '바로가기·시작 프로그램·예약 작업·브라우저 설정을 확인했어요.',
-        right: btn('refresh', '다시 찾기', runScan, { testid: 'ad-rescan' }),
+        right: h('div', { class: 'btn-row' }, heroSlot, btn('refresh', '다시 찾기', runScan, { testid: 'ad-rescan' })),
       }),
       runningBox(scan.running, runScan),
     ];
     if (fixable.length) {
-      footerEl = h('div', { class: 'btn-row', style: { padding: '14px 20px', borderTop: '1px solid var(--hairline)' } });
+      footerEl = h('div', { class: 'footer-bar sticky', 'data-testid': 'ad-footer' });
       parts.push(h('section', { class: 'panel' }, h('div', { class: 'items', 'data-testid': 'ad-list' }, fixable.map(itemRow)), footerEl));
     }
     if (info.length) {

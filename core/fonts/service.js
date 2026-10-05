@@ -17,6 +17,86 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
   const P = platform.paths;
   let lastList = new Map(); // id -> item (미리보기·정리에 사용)
 
+  // ── 폰트 보관함: 정리한 폰트 파일을 사용자가 찾을 수 있는 곳(D드라이브 등)에 날짜별로 모아 둔다 ──
+  const ARCHIVE_NAME = '쎈Clean 폰트 보관함';
+  function archiveRoot() {
+    let disks = [];
+    try { disks = platform.disks ? platform.disks() || [] : []; } catch { disks = []; }
+    const sys = path.resolve(P.systemDrive || 'C:\\').toLowerCase();
+    const others = disks.filter((d) => !d.removable && path.resolve(d.root).toLowerCase() !== sys);
+    const pref = (store.read('cdrive-prefs.json', {}) || {}).target;
+    const pick = others.find((d) => d.letter === pref) || others.sort((a, b) => b.free - a.free)[0];
+    return pick ? path.join(pick.root, ARCHIVE_NAME) : path.join(P.documents, ARCHIVE_NAME);
+  }
+  const dayName = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  function uniqueIn(dir, name) {
+    const ext = path.extname(name), base = name.slice(0, name.length - ext.length);
+    let p = path.join(dir, name);
+    for (let i = 2; fs.existsSync(p) && i < 1000; i++) p = path.join(dir, `${base} (${i})${ext}`);
+    return p;
+  }
+  // 복사하고 크기가 같은지 확인한다. 실패하면 null
+  function archiveCopy(src, dir) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      const dest = uniqueIn(dir, path.basename(src));
+      fs.copyFileSync(src, dest);
+      if (fs.statSync(dest).size !== fs.statSync(src).size) { try { fs.unlinkSync(dest); } catch { /* ignore */ } return null; }
+      return dest;
+    } catch { return null; }
+  }
+  function appendList(dir, rows) {
+    const f = path.join(dir, '정리한 폰트 목록.txt');
+    const head = fs.existsSync(f) ? '' : '\uFEFF쎈Clean으로 정리한 폰트 (파일을 더블클릭하고 [설치]를 누르면 다시 설치돼요)\r\n\r\n';
+    const lines = rows.map((r) => `${r.name} · ${path.basename(r.backup)} · ${r.manufacturer || '제작사 정보 없음'} · ${r.scope === 'system' ? '이 PC 전체' : '내 계정'} · ${new Date().toLocaleString('ko-KR')}`).join('\r\n');
+    try { fs.appendFileSync(f, head + lines + '\r\n', 'utf8'); } catch { /* ignore */ }
+  }
+  function archiveInfo() {
+    const root = archiveRoot();
+    let count = 0;
+    try {
+      for (const d of fs.readdirSync(root, { withFileTypes: true })) {
+        if (!d.isDirectory()) continue;
+        count += fs.readdirSync(path.join(root, d.name)).filter((f) => FONT_EXT.has(path.extname(f).toLowerCase())).length;
+      }
+    } catch { return null; }
+    return count ? { path: root, count } : null;
+  }
+  function openArchive() {
+    const root = archiveRoot();
+    if (!fs.existsSync(root)) return false;
+    platform.shell.openPath(root);
+    return true;
+  }
+  // 1.3.0까지 AppData에 둔 백업을 보관함으로 옮긴다(C드라이브 공간 확보)
+  function migrateBackups() {
+    const oldRoot = path.join(store.dir, 'font-backup');
+    if (!fs.existsSync(oldRoot)) return { moved: 0 };
+    const batches = store.read('font-undo.json', []);
+    let moved = 0;
+    for (const b of batches) {
+      const rows = [];
+      for (const e of b.entries) {
+        if (!e.backup || !e.backup.toLowerCase().startsWith(oldRoot.toLowerCase()) || !fs.existsSync(e.backup)) continue;
+        const dir = path.join(archiveRoot(), dayName(b.at));
+        const fileName = path.basename(e.file);
+        try {
+          fs.mkdirSync(dir, { recursive: true });
+          const dest = uniqueIn(dir, fileName);
+          fs.copyFileSync(e.backup, dest);
+          if (fs.statSync(dest).size !== fs.statSync(e.backup).size) continue;
+          e.backup = dest; moved++;
+          rows.push({ name: e.name, backup: dest, scope: e.scope });
+        } catch { /* 다음에 다시 */ }
+      }
+      if (rows.length) appendList(path.join(archiveRoot(), dayName(b.at)), rows);
+    }
+    store.write('font-undo.json', batches);
+    const stillUsed = batches.some((b) => b.entries.some((e) => e.backup && e.backup.toLowerCase().startsWith(oldRoot.toLowerCase())));
+    if (!stillUsed) { try { fs.rmSync(oldRoot, { recursive: true, force: true }); } catch { /* ignore */ } }
+    return { moved };
+  }
+
   const idOf = (file) => crypto.createHash('sha1').update(file.toLowerCase()).digest('hex').slice(0, 16);
 
   function cachedInfo(file, cache) {
@@ -90,6 +170,8 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
       school: schoolStatus(items),
       pending: store.read('font-pending.json', []).length,
       undo: store.read('font-undo.json', []).map((b) => ({ id: b.id, at: b.at, count: b.entries.length })),
+      archive: archiveInfo(),
+      archivePath: archiveRoot(),
     };
   }
 
@@ -102,15 +184,16 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
 
   async function clean(ids) {
     const batch = { id: String(Date.now()), at: Date.now(), entries: [] };
-    const backupDir = path.join(store.dir, 'font-backup', batch.id);
+    const backupDir = path.join(archiveRoot(), dayName(batch.at));
     const results = [];
     const sys = [];
+    const listRows = [];
     for (const id of ids || []) {
       const item = lastList.get(id);
       if (!item || !item.removable) { results.push({ id, ok: false, reason: item ? 'not-removable' : 'unknown' }); continue; }
-      fs.mkdirSync(backupDir, { recursive: true });
-      const backup = path.join(backupDir, `${sys.length + batch.entries.length}_${item.fileName}`);
-      try { fs.copyFileSync(item.file, backup); } catch { results.push({ id, ok: false, reason: 'error' }); continue; }
+      // 보관함에 복사하고 확인된 뒤에만 정리한다
+      const backup = archiveCopy(item.file, backupDir);
+      if (!backup) { results.push({ id, ok: false, reason: 'backup' }); continue; }
       if (item.scope === 'system') { sys.push({ id, item, backup }); continue; }
       const regVal = platform.reg.read(USER_FONTS_KEY, item.regName);
       platform.reg.del(USER_FONTS_KEY, item.regName);
@@ -119,6 +202,7 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
       try { fs.unlinkSync(item.file); moved = true; } catch {
         store.update('font-pending.json', [], (l) => { l.push(item.file); return l; });
       }
+      listRows.push({ name: item.name, backup, manufacturer: item.manufacturer, scope: 'user' });
       batch.entries.push({ scope: 'user', name: item.name, regName: item.regName, regValue: regVal ? regVal.value : item.file, file: item.file, backup, pending: !moved });
       results.push({ id, ok: true, pending: !moved });
     }
@@ -144,13 +228,15 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
           return;
         }
         const pending = !!(del && del.pending) || !(del && del.ok);
+        listRows.push({ name: item.name, backup, manufacturer: item.manufacturer, scope: 'system' });
         batch.entries.push({ scope: 'system', name: item.name, regName: item.regName, regValue: regVals[i] ? regVals[i].value : item.fileName, file: item.file, backup, pending });
         results.push({ id, ok: true, pending });
       });
     }
     platform.fonts.broadcast();
+    if (listRows.length) appendList(backupDir, listRows);
     if (batch.entries.length) store.update('font-undo.json', [], (l) => { l.push(batch); return l.slice(-10); });
-    return { batchId: batch.entries.length ? batch.id : null, results, canceled };
+    return { batchId: batch.entries.length ? batch.id : null, results, canceled, archive: batch.entries.length ? archiveRoot() : null };
   }
 
   async function undo(batchId) {
@@ -158,7 +244,9 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
     const batch = batches.find((b) => b.id === batchId) || batches[batches.length - 1];
     if (!batch) return { ok: false };
     let restored = 0;
-    const sys = batch.entries.filter((e) => e.scope === 'system');
+    const missing = batch.entries.filter((e) => !fs.existsSync(e.backup)).length;
+    if (missing === batch.entries.length) return { ok: false, code: 'missing' };
+    const sys = batch.entries.filter((e) => e.scope === 'system' && fs.existsSync(e.backup));
     if (sys.length) {
       const ops = [];
       for (const e of sys) {
@@ -169,7 +257,7 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
       if (!r.ok) return { ok: false, canceled: !!r.canceled };
       sys.forEach((e) => { platform.fonts.add(e.file); restored++; });
     }
-    for (const e of batch.entries.filter((x) => x.scope !== 'system')) {
+    for (const e of batch.entries.filter((x) => x.scope !== 'system' && fs.existsSync(x.backup))) {
       try {
         if (!fs.existsSync(e.file)) { fs.mkdirSync(path.dirname(e.file), { recursive: true }); fs.copyFileSync(e.backup, e.file); }
         platform.reg.write(USER_FONTS_KEY, e.regName, platform.REG.SZ, e.regValue);
@@ -180,7 +268,7 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
     }
     platform.fonts.broadcast();
     store.write('font-undo.json', batches.filter((b) => b.id !== batch.id));
-    return { ok: true, restored };
+    return { ok: true, restored, missing };
   }
 
   // 지난번에 잠겨 있어 못 지운 폰트 파일을 다시 지워 본다(앱 시작 시).
@@ -229,7 +317,7 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
     return results;
   }
 
-  return { list, clean, undo, retryPending, installSchool, runningApps, fileFor };
+  return { migrateBackups, openArchive, archiveRoot, list, clean, undo, retryPending, installSchool, runningApps, fileFor };
 }
 
 module.exports = { createFontService, USER_FONTS_KEY };

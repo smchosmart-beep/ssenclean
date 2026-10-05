@@ -65,12 +65,12 @@ export default async function updatesView(ctx) {
     } else if (u.state === 'latest') {
       level = 'ok'; tag = '최신';
     } else {
-      right = btn('search', '업데이트 확인', async () => {
+      desc = [desc, '업데이트 창을 열어 직접 확인하세요'].filter(Boolean).join(' · ');
+      right = btn('open', '업데이트 열기', async () => {
         const r = await api('updates:run', 'chrome');
         if (r.inline) { chromeLive = { phase: 'checking' }; render(); } else if (r.guide) toast(r.guide);
       }, { testid: 'upd-chrome' });
     }
-    if (u.autoOnly && u.state === 'outdated') desc += ' · 학교 정책에 따라 자동으로 업데이트돼요';
     return statusRow({ level, iconName: ICON.chrome, title: u.name, desc, tag, right, testid: 'upd-row-chrome' });
   }
 
@@ -82,16 +82,17 @@ export default async function updatesView(ctx) {
     else { level = 'info'; tag = '확인할 수 없어요'; }
     if (u.id === 'windows') {
       desc = [u.lastInstalled ? `마지막 업데이트 ${fmtDate(u.lastInstalled)}` : null, u.pending ? `설치할 업데이트 ${u.pending}개` : null].filter(Boolean).join(' · ') || '업데이트 기록을 확인할 수 없어요';
-      right = btn(u.state === 'outdated' ? 'up' : 'search', u.state === 'outdated' ? '업데이트' : '업데이트 확인', async () => { const r = await api('updates:run', 'windows'); if (r.guide) toast(r.guide); }, { testid: 'upd-windows' });
+      right = btn('open', '업데이트 열기', async () => { const r = await api('updates:run', 'windows'); if (r.guide) toast(r.guide); }, { testid: 'upd-windows' });
     } else if (u.id === 'hangul') {
       desc = [u.version ? `현재 ${u.version}` : null, u.product].filter(Boolean).join(' · ');
       right = u.hasUpdater
-        ? btn('up', '업데이트 확인', async () => { const r = await api('updates:run', 'hangul'); if (r.howto) howToHangul(); else if (r.guide) toast(r.guide); }, { testid: 'upd-hangul' })
+        ? btn('open', '업데이트 열기', async () => { const r = await api('updates:run', 'hangul'); if (r.howto) howToHangul(); else if (r.guide) toast(r.guide); }, { testid: 'upd-hangul' })
         : btn('info', '업데이트 방법', () => howToHangul(), { testid: 'upd-hangul' });
     } else {
       desc = u.version ? `현재 ${u.version}` : '';
-      if (u.canUpdate) right = btn('search', '업데이트 확인', async () => { const r = await api('updates:run', u.id); if (r.guide) toast(r.guide); }, { testid: `upd-${u.id}` });
+      if (u.canUpdate) right = btn('open', '업데이트 열기', async () => { const r = await api('updates:run', u.id); if (r.guide) toast(r.guide); }, { testid: `upd-${u.id}` });
     }
+    if (u.state !== 'outdated' && u.state !== 'latest' && right && u.id !== 'windows') desc = [desc, '업데이트 창을 열어 직접 확인하세요'].filter(Boolean).join(' · ');
     return statusRow({ level, iconName: ICON[u.id], title: u.name, desc, tag, right, testid: `upd-row-${u.id}` });
   }
 
@@ -101,7 +102,7 @@ export default async function updatesView(ctx) {
     box.replaceChildren(
       hero({ level: out.length ? 'warn' : 'ok', iconName: out.length ? 'up' : 'checkCircle', title: out.length ? '업데이트할 프로그램이 {}있어요' : '확인된 프로그램은 최신이에요', titleEmph: out.length ? `${out.length}개 ` : null, desc: '파일은 외부로 보내지 않고, 업데이트 확인에만 인터넷을 써요.', right: btn('refresh', '다시 확인', run, { testid: 'upd-recheck' }) }),
       h('section', { class: 'panel rows' }, list.length ? list.map(row) : h('div', { class: 'empty' }, '확인할 프로그램이 설치되어 있지 않아요')),
-      tip('쎈Clean은 설치파일을 직접 내려받지 않고, 각 프로그램의 공식 업데이트 기능을 써요. Windows 확인 창이 뜨면 [예]를 누르세요.'));
+      tip('[업데이트 열기]를 누르면 각 프로그램의 업데이트 창이 열려요. 거기서 안내에 따라 진행하세요. 쎈Clean은 설치파일을 직접 내려받지 않아요. Windows 확인 창이 뜨면 [예]를 누르세요.'));
   }
 
   async function run() {

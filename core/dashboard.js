@@ -89,7 +89,7 @@ function createDashboard(s) {
     },
     async desktop() {
       const q = s.desktop.quickStatus();
-      return card('desktop', 'info', `바탕화면 - 파일 ${q.total}개`, `${q.months}개월 넘게 안 건드린 파일 ${q.old}개`, { kind: 'navigate', target: 'desktop', label: '정리하기', icon: 'folder' });
+      return card('desktop', 'info', `바탕화면 - 파일 ${q.total}개`, `정리할 파일 ${q.old}개 (최근 ${q.keepDays === 7 ? '1주' : q.keepDays === 14 ? '2주' : q.keepDays === 30 ? '1개월' : '3개월'} 안에 고친 파일은 그대로)`, { kind: 'navigate', target: 'desktop', label: '정리하기', icon: 'folder' });
     },
   };
 

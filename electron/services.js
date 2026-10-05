@@ -80,6 +80,7 @@ function createServices({ platform, spawnScan, emit }) {
     'fonts:running': () => s.fonts.runningApps(),
     'fonts:clean': (ids) => s.fonts.clean(ids),
     'fonts:undo': (id) => s.fonts.undo(id),
+    'fonts:openArchive': () => s.fonts.openArchive(),
     'fonts:installSchool': () => s.fonts.installSchool(),
 
     'password:status': () => s.password.status({ refresh: true }),
@@ -151,6 +152,7 @@ function createServices({ platform, spawnScan, emit }) {
 
   // 앱 시작 때 할 일
   try { s.fonts.retryPending(); } catch { /* ignore */ }
+  try { s.fonts.migrateBackups(); } catch { /* ignore */ }
 
   return { services: s, channels };
 }

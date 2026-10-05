@@ -29,9 +29,9 @@ button, input, select { font: inherit; color: inherit; }
 .mock-badge { font-size: 14px; color: var(--warn); background: var(--warn-bg); padding: 4px 12px; border-radius: 999px; }
 
 /* layout */
-.wrap { display: flex; gap: 16px; padding: 16px; height: calc(100% - 72px); }
+.wrap { display: flex; gap: 16px; padding: 16px 6px 16px 16px; height: calc(100% - 72px); }
 .side { width: 232px; flex: none; background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 14px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
-main { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-bottom: 8px; outline: none; }
+main { flex: 1; min-width: 0; overflow-y: auto; scrollbar-gutter: stable; display: flex; flex-direction: column; gap: 14px; padding: 0 6px 6px 0; outline: none; }
 main:focus, main:focus-visible { outline: none; }
 
 /* buttons — 한 가지 모양 */
@@ -225,3 +225,24 @@ textarea.field { height: auto; min-height: 96px; padding: 10px 12px; resize: ver
 .drive-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: var(--r-md); }
 .drive-row.disabled { opacity: .55; }
 .disk-bar.tone-ok > i { background: var(--ok); }
+
+/* 얇은 스크롤바 (전 화면) */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CFCAC0; border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: #B5B0A6; background-clip: padding-box; }
+::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* 바탕화면 정리 미리보기 나무 */
+.tree .node { min-height: 38px; }
+.tree .node.file { font-size: 15px; color: var(--ink); }
+.tree .node.file .fname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 520px; }
+.tree .btn { height: 32px; padding: 0 10px; font-size: 13px; margin-left: 6px; }
+.tree .btn svg { width: 14px; height: 14px; }
+.tree select.sel { height: 32px; font-size: 14px; max-width: 300px; }
+.tree .check { padding: 0; }
+.linkish { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; padding: 2px 0; font: inherit; color: var(--ink-strong); cursor: pointer; }
+.linkish:hover span { text-decoration: underline; }
+.linkish svg { width: 17px; height: 17px; stroke: var(--brand); fill: none; stroke-width: 2; }
+.tree .node.file.kept .fname { color: var(--ink-mute); text-decoration: line-through; }

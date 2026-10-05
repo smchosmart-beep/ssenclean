@@ -30,7 +30,7 @@ function createStore(dir) {
   const DEFAULT_SETTINGS = {
     passwordCycleDays: 90,
     screensaverMinutes: 10,
-    desktop: { scope: 'old', olderThanMonths: 3, groupBy: 'semester-type', finds: { installers: true, duplicates: true, brokenShortcuts: true, privacy: true } },
+    desktop: { scope: 'recent', keepDays: 14, groupBy: 'year-topic', finds: { installers: true, duplicates: true, brokenShortcuts: true, privacy: true } },
     privacyRoots: null,
     manualPasswordDate: null,
     role: 'user',

@@ -6,7 +6,7 @@ const INVOKE = [
   'app:info', 'app:openExternal', 'settings:get', 'settings:set',
   'dashboard:items', 'dashboard:check',
   'privacy:roots', 'privacy:start', 'privacy:stop', 'privacy:results', 'privacy:delete', 'privacy:exclude', 'privacy:exclusions', 'privacy:unexclude', 'privacy:reveal', 'privacy:openTrash', 'privacy:last', 'privacy:pickFolder', 'privacy:drives',
-  'fonts:list', 'fonts:running', 'fonts:clean', 'fonts:undo', 'fonts:installSchool',
+  'fonts:list', 'fonts:running', 'fonts:clean', 'fonts:undo', 'fonts:installSchool', 'fonts:openArchive',
   'password:status', 'password:change', 'password:setDate', 'password:openSettings', 'password:openMicrosoft',
   'screensaver:status', 'screensaver:secure', 'screensaver:undo', 'screensaver:open',
   'updates:check', 'updates:run',

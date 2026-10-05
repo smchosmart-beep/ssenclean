@@ -5,6 +5,9 @@ const path = require('path');
 const crypto = require('crypto');
 
 const ARCHIVE = '바탕화면 보관함';
+const TOPICS = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'desktop-topics.json'), 'utf8'));
+const GROUPS = ['year-topic', 'topic', 'type'];
+const KEEP_DAYS = [7, 14, 30, 90];
 const CATEGORIES = [
   ['한글', ['.hwp', '.hwpx', '.hwt', '.show', '.cell']],
   ['엑셀', ['.xlsx', '.xls', '.xlsm', '.csv']],
@@ -27,18 +30,57 @@ function semesterOf(ms) {
   if (m >= 9) return `${y}학년도 2학기`;
   return `${y - 1}학년도 2학기`;
 }
+// 학년도: 3월 ~ 다음 해 2월
+function schoolYearOf(ms) {
+  const d = new Date(ms);
+  return `${d.getMonth() + 1 >= 3 ? d.getFullYear() : d.getFullYear() - 1}학년도`;
+}
 const categoryOf = (name) => EXT_CAT.get(path.extname(name).toLowerCase()) || '기타';
 
+// 하는 일: 파일 이름에 들어 있는 가장 긴 낱말의 폴더(같으면 목록 위쪽). 낱말 없는 사진·영상은 '사진·영상'
+function topicOf(name) {
+  const low = path.basename(name, path.extname(name)).toLowerCase().replace(/\s+/g, '');
+  let best = null;
+  TOPICS.topics.forEach((t, i) => {
+    for (const w of t.words) {
+      const k = w.toLowerCase().replace(/\s+/g, '');
+      if (low.includes(k) && (!best || k.length > best.len || (k.length === best.len && i < best.i))) best = { name: t.name, len: k.length, i };
+    }
+  });
+  if (best) return best.name;
+  const cat = categoryOf(name);
+  return cat === '사진' || cat === '영상' ? TOPICS.media : TOPICS.other;
+}
+
+// 비슷한 이름 묶음 키: 번호·(수정)·최종·복사본·날짜·버전을 떼어 낸 이름
+function similarBase(name) {
+  let b = path.basename(name, path.extname(name));
+  const strip = [
+    /[\s_\-.]*\(\s*\d+\s*\)$/, /[\s_\-.]*\((수정|최종|복사본|사본)[^)]*\)$/, /[\s_\-.]*(최종|수정본|수정|복사본|사본|copy|final|ver\.?\s*\d+|v\d+)$/i,
+    /[\s_\-.]*\d{6}$/, /[\s_\-.]*\d{4}[.\-_]?\d{2}[.\-_]?\d{2}$/, /[\s_\-.]*\d{2}[.\-_]\d{2}[.\-_]\d{2}$/, /[\s_\-.]+\d{1,3}$/, /[\s_\-.]*\d{1,2}(차|회|번)$/,
+  ];
+  for (let i = 0; i < 6; i++) { const before = b; for (const re of strip) b = b.replace(re, ''); if (b === before) break; }
+  return b.trim();
+}
+
+function normalizeOpts(o) {
+  const out = { ...o };
+  if (!GROUPS.includes(out.groupBy)) out.groupBy = 'year-topic'; // 예전 '학기별' 등은 추천으로
+  if (out.scope !== 'all') out.scope = 'recent';
+  if (!KEEP_DAYS.includes(Number(out.keepDays))) out.keepDays = 14;
+  out.keepDays = Number(out.keepDays);
+  return out;
+}
+
 function folderFor(file, groupBy) {
-  const sem = semesterOf(file.mtimeMs);
-  const cat = categoryOf(file.name);
   switch (groupBy) {
-    case 'type': return [cat];
-    case 'semester': return [sem];
-    case 'none': return [];
-    default: return [sem, cat];
+    case 'type': return [categoryOf(file.name)];
+    case 'topic': return [topicOf(file.name)];
+    default: return [schoolYearOf(file.mtimeMs), topicOf(file.name)];
   }
 }
+
+const cleanName = (n) => String(n || '').replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
 
 function sha1(file) {
   return new Promise((resolve) => {
@@ -79,10 +121,10 @@ function createDesktopService({ platform, store, scanPrivacy }) {
 
   function quickStatus() {
     const files = listDesktop();
-    const months = store.settings.get().desktop.olderThanMonths || 3;
-    const cutoff = Date.now() - months * 30 * 86400000;
+    const opt = normalizeOpts(store.settings.get().desktop);
+    const cutoff = Date.now() - opt.keepDays * 86400000;
     const movable = files.filter((f) => !NEVER_MOVE.has(path.extname(f.name).toLowerCase()));
-    return { total: files.length, old: movable.filter((f) => f.mtimeMs < cutoff).length, months };
+    return { total: files.length, old: movable.filter((f) => f.mtimeMs < cutoff).length, keepDays: opt.keepDays };
   }
 
   async function findExtras(files, finds) {
@@ -143,10 +185,10 @@ function createDesktopService({ platform, store, scanPrivacy }) {
 
   async function plan(options = {}, onProgress = () => {}) {
     const s = store.settings.get().desktop;
-    const opt = { ...s, ...options, finds: { ...s.finds, ...(options.finds || {}) } };
+    const opt = normalizeOpts({ ...s, ...options, finds: { ...s.finds, ...(options.finds || {}) } });
     store.settings.set({ desktop: opt });
     const files = listDesktop();
-    const cutoff = Date.now() - (opt.olderThanMonths || 3) * 30 * 86400000;
+    const cutoff = Date.now() - opt.keepDays * 86400000;
     onProgress({ phase: 'files' });
     const extras = await findExtras(files, opt.finds);
 
@@ -156,51 +198,58 @@ function createDesktopService({ platform, store, scanPrivacy }) {
       privacy = await scanPrivacy([P.desktop]);
     }
 
-    const archiveRoot = path.join(P.desktop, ARCHIVE);
-    const taken = new Set();
     const moves = [];
     for (const f of files) {
       const ext = path.extname(f.name).toLowerCase();
       if (NEVER_MOVE.has(ext)) continue;
-      if (opt.scope === 'old' && f.mtimeMs >= cutoff) continue;
-      const folders = folderFor(f, opt.groupBy);
-      const to = uniquePath(path.join(archiveRoot, ...folders, f.name), taken);
-      taken.add(to.toLowerCase());
+      if (opt.scope === 'recent' && f.mtimeMs >= cutoff) continue;
       const pv = privacy.get(f.path);
-      moves.push({ from: f.path, to, name: f.name, folders, privacy: pv ? pv.level : 0, privacyCounts: pv ? pv.counts : null });
+      moves.push({ id: String(moves.length), from: f.path, name: f.name, folders: folderFor(f, opt.groupBy), privacy: pv ? pv.level : 0, privacyCounts: pv ? pv.counts : null });
     }
-
-    // 나무 모양 미리보기
-    const tree = new Map();
+    // 비슷한 이름 3개 이상이면 그 이름의 폴더로 한 번 더 묶는다
+    const groups = new Map();
     for (const m of moves) {
-      const top = m.folders[0] || ARCHIVE;
-      const sub = m.folders[1] || null;
-      if (!tree.has(top)) tree.set(top, { label: top, count: 0, privacy: 0, children: new Map() });
-      const node = tree.get(top);
-      node.count++;
-      if (m.privacy) node.privacy++;
-      if (sub) {
-        if (!node.children.has(sub)) node.children.set(sub, { label: sub, count: 0, privacy: 0 });
-        const c = node.children.get(sub); c.count++; if (m.privacy) c.privacy++;
-      }
+      const base = similarBase(m.name);
+      if (!base) continue;
+      const k = `${m.folders.join('/')}|${base.toLowerCase()}`;
+      if (!groups.has(k)) groups.set(k, { base, list: [] });
+      groups.get(k).list.push(m);
     }
-    const treeOut = [...tree.values()].sort((a, b) => a.label.localeCompare(b.label, 'ko', { numeric: true }))
-      .map((n) => ({ label: n.label, count: n.count, privacy: n.privacy, children: [...n.children.values()].sort((a, b) => a.label.localeCompare(b.label, 'ko')) }));
-
-    const privacyOnDesktop = files.filter((f) => privacy.has(f.path)).map((f) => ({ path: f.path, name: f.name, size: f.size, level: privacy.get(f.path).level, counts: privacy.get(f.path).counts }));
+    for (const g of groups.values()) if (g.list.length >= 3) g.list.forEach((m) => { m.folders = [...m.folders, cleanName(g.base)]; m.similar = true; });
 
     lastPlan = { id: String(Date.now()), options: opt, moves, extras, createdAt: Date.now() };
+    const privacyOnDesktop = files.filter((f) => privacy.has(f.path)).map((f) => ({ path: f.path, name: f.name, size: f.size, level: privacy.get(f.path).level, counts: privacy.get(f.path).counts }));
     return {
       id: lastPlan.id,
       options: opt,
       total: files.length,
       moveCount: moves.length,
       keepCount: files.length - moves.length,
-      moves: moves.map((m) => ({ from: m.from, name: m.name, folder: [ARCHIVE, ...m.folders].join(' › '), privacy: m.privacy })),
-      tree: treeOut,
+      moves: moves.map((m) => ({ id: m.id, from: m.from, name: m.name, folders: m.folders, folder: [ARCHIVE, ...m.folders].join(' › '), privacy: m.privacy, similar: !!m.similar })),
+      tree: buildTree(moves.map((m) => ({ ...m, folders: m.folders }))),
       extras,
       privacy: privacyOnDesktop,
     };
+  }
+
+  // 미리보기 나무: [{ path:'2026학년도/수업', label, count, privacy, children:[…], files:[{id,name,privacy}] }]
+  function buildTree(moves) {
+    const root = { children: new Map(), files: [] };
+    for (const m of moves) {
+      let node = root;
+      const acc = [];
+      for (const seg of m.folders) {
+        acc.push(seg);
+        if (!node.children.has(seg)) node.children.set(seg, { path: acc.join('/'), label: seg, count: 0, privacy: 0, children: new Map(), files: [] });
+        node = node.children.get(seg);
+        node.count++;
+        if (m.privacy) node.privacy++;
+      }
+      node.files.push({ id: m.id, name: m.name, privacy: m.privacy });
+    }
+    const out = (n) => [...n.children.values()].sort((a, b) => b.label.localeCompare(a.label, 'ko', { numeric: true }) * (/학년도$/.test(a.label) ? 1 : -1))
+      .map((c) => ({ path: c.path, label: c.label, count: c.count, privacy: c.privacy, children: out(c), files: c.files }));
+    return { children: out(root), files: root.files };
   }
 
   async function moveFile(from, to) {
@@ -212,7 +261,22 @@ function createDesktopService({ platform, store, scanPrivacy }) {
     }
   }
 
-  async function apply({ planId, deletePaths = [] }) {
+  // overrides: { [moveId]: { keep:true } | { folder:'2026학년도/수업' } }, renames: { '2026학년도/기타': '방과후' }
+  function finalFolders(m, overrides, renames) {
+    const o = overrides[m.id];
+    let folders = o && typeof o.folder === 'string' ? o.folder.split('/').map(cleanName).filter(Boolean) : [...m.folders];
+    // 깊은 경로부터 이름 바꾸기 적용
+    const keys = Object.keys(renames).sort((a, b) => b.split('/').length - a.split('/').length);
+    for (const k of keys) {
+      const segs = k.split('/');
+      const name = cleanName(renames[k]);
+      if (!name) continue;
+      if (segs.length <= folders.length && segs.every((x, i) => folders[i] === x)) folders[segs.length - 1] = name;
+    }
+    return folders;
+  }
+
+  async function apply({ planId, deletePaths = [], overrides = {}, renames = {} }) {
     if (!lastPlan || lastPlan.id !== planId) return { ok: false, code: 'stale' };
     const extrasPaths = new Set(Object.values(lastPlan.extras).flat().map((x) => x.path));
     const toDelete = deletePaths.filter((p) => extrasPaths.has(p));
@@ -221,15 +285,21 @@ function createDesktopService({ platform, store, scanPrivacy }) {
     for (const p of toDelete) {
       try { await platform.shell.trash(p); log.trashed.push(p); } catch { log.failed.push({ path: p, op: 'trash' }); }
     }
+    const archiveRoot = path.join(P.desktop, ARCHIVE);
+    const taken = new Set();
+    let kept = 0;
     for (const m of lastPlan.moves) {
       if (delSet.has(m.from)) continue;
-      try { await moveFile(m.from, m.to); log.moves.push({ from: m.from, to: m.to }); } catch (e) {
+      if (overrides[m.id] && overrides[m.id].keep) { kept++; continue; }
+      const to = uniquePath(path.join(archiveRoot, ...finalFolders(m, overrides || {}, renames || {}), m.name), taken);
+      taken.add(to.toLowerCase());
+      try { await moveFile(m.from, to); log.moves.push({ from: m.from, to }); } catch (e) {
         log.failed.push({ path: m.from, op: 'move', reason: e && (e.code === 'EBUSY' || e.code === 'EPERM') ? 'locked' : 'error' });
       }
     }
     store.write(path.join('desktop-undo', `${log.id}.json`), log);
     lastPlan = null;
-    return { ok: true, logId: log.id, moved: log.moves.length, trashed: log.trashed.length, failed: log.failed.length, failedItems: log.failed.map((f) => ({ name: path.basename(f.path), reason: f.reason || 'error' })) };
+    return { ok: true, logId: log.id, moved: log.moves.length, kept, trashed: log.trashed.length, failed: log.failed.length, failedItems: log.failed.map((f) => ({ name: path.basename(f.path), reason: f.reason || 'error' })) };
   }
 
   function history() {
@@ -270,4 +340,4 @@ function createDesktopService({ platform, store, scanPrivacy }) {
   return { quickStatus, plan, apply, undo, history, ARCHIVE };
 }
 
-module.exports = { createDesktopService, semesterOf, categoryOf };
+module.exports = { createDesktopService, semesterOf, schoolYearOf, categoryOf, topicOf, similarBase };
