@@ -68,7 +68,11 @@
       "shortcutName": "쎈Clean",
       "artifactName": "SenClean_Setup_${version}.exe"
     },
-    "publish": null
+    "publish": null,
+    "electronLanguages": [
+      "ko",
+      "en-US"
+    ]
   },
   "engines": {
     "node": ">=20"
