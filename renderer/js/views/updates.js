@@ -101,7 +101,7 @@ export default async function updatesView(ctx) {
     box.replaceChildren(
       hero({ level: out.length ? 'warn' : 'ok', iconName: out.length ? 'up' : 'checkCircle', title: out.length ? '업데이트할 프로그램이 {}있어요' : '확인된 프로그램은 최신이에요', titleEmph: out.length ? `${out.length}개 ` : null, desc: '파일은 외부로 보내지 않고, 업데이트 확인에만 인터넷을 써요.', right: btn('refresh', '다시 확인', run, { testid: 'upd-recheck' }) }),
       h('section', { class: 'panel rows' }, list.length ? list.map(row) : h('div', { class: 'empty' }, '확인할 프로그램이 설치되어 있지 않아요')),
-      tip('쎈클린은 설치파일을 직접 내려받지 않고, 각 프로그램의 공식 업데이트 기능을 써요. Windows 확인 창이 뜨면 [예]를 누르세요.'));
+      tip('쎈Clean은 설치파일을 직접 내려받지 않고, 각 프로그램의 공식 업데이트 기능을 써요. Windows 확인 창이 뜨면 [예]를 누르세요.'));
   }
 
   async function run() {

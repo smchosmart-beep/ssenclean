@@ -1,4 +1,4 @@
-// 가짜 PC에서 쎈클린을 실제로 띄워 주요 흐름을 확인한다.
+// 가짜 PC에서 쎈Clean을 실제로 띄워 주요 흐름을 확인한다.
 const { test, expect, _electron } = require('@playwright/test');
 const os = require('os');
 const fs = require('fs');
@@ -117,7 +117,7 @@ test('PC암호: 만들기 → D-day', async () => {
   await expect(win.getByTestId('nav-password').locator('.dot')).toHaveClass(/ok/);
 });
 
-test('업데이트: 크롬을 쎈클린 안에서 업데이트 → 다시 켜기, 한글 업데이트 프로그램', async () => {
+test('업데이트: 크롬을 쎈Clean 안에서 업데이트 → 다시 켜기, 한글 업데이트 프로그램', async () => {
   await win.getByTestId('nav-updates').click();
   const row = win.getByTestId('upd-row-chrome');
   await expect(row).toContainText('업데이트 있음', { timeout: 20000 });
@@ -239,7 +239,7 @@ test('IP 주소: 교사 - 내 IP 복사 → 받은 메시지 붙여넣기 → �
   await expect(win.getByTestId('net-hero')).toContainText('10.20.3.42', { timeout: 15000 });
   await win.getByTestId('net-room').fill('3학년 2반');
   await win.getByTestId('net-copy').click();
-  await expect.poll(() => app.evaluate(() => global.__sen.platform._state().clipboard)).toContain('[쎈클린 IP 정보] 3학년 2반');
+  await expect.poll(() => app.evaluate(() => global.__sen.platform._state().clipboard)).toContain('[쎈Clean IP 정보] 3학년 2반');
   await shot('09-network-mine');
   // 정보부장이 보낸 메시지가 클립보드에 있다고 치고 [받은 내용 붙여넣기]
   await app.evaluate(() => { global.__sen.platform.clipboard.write('[쎈클린 IP 변경] 3학년 2반\nIP 10.20.3.77 / 서브넷 255.255.255.0 / 게이트웨이 10.20.3.1\nDNS 10.20.0.1, 10.20.0.2'); });
@@ -267,7 +267,7 @@ test('IP 주소: 정보부장 - 받은 내용 저장 → 교실 목록 → IP �
   await win.getByTestId('nav-network').click();
   await win.getByTestId('tab-registry').click();
   // 교사가 보낸 메시지(앞 테스트에서 복사한 내용 형식)
-  await app.evaluate(() => { global.__sen.platform.clipboard.write('[쎈클린 IP 정보] 3학년 2반\nPC이름 SM-3-2\nIP 10.20.3.42 / 서브넷 255.255.255.0 / 게이트웨이 10.20.3.1\nDNS 10.20.0.1, 10.20.0.2\nMAC 00-1A-2B-3C-4D-5E\n방식 고정 IP'); });
+  await app.evaluate(() => { global.__sen.platform.clipboard.write('[쎈Clean IP 정보] 3학년 2반\nPC이름 SM-3-2\nIP 10.20.3.42 / 서브넷 255.255.255.0 / 게이트웨이 10.20.3.1\nDNS 10.20.0.1, 10.20.0.2\nMAC 00-1A-2B-3C-4D-5E\n방식 고정 IP'); });
   await win.getByTestId('reg-paste-save').click();
   await app.evaluate(() => { global.__sen.platform.clipboard.write('[쎈클린 IP 정보] 3학년 1반\nPC이름 SM-3-1\nIP 10.20.3.41 / 서브넷 255.255.255.0 / 게이트웨이 10.20.3.1\nMAC AA-BB-CC-DD-EE-01'); });
   await win.getByTestId('reg-paste-save').click();
@@ -283,7 +283,7 @@ test('IP 주소: 정보부장 - 받은 내용 저장 → 교실 목록 → IP �
   await win.getByTestId('as-ip').fill('10.20.3.50');
   await win.getByTestId('as-make').click();
   await expect(win.getByTestId('as-message')).toContainText('IP 10.20.3.50 / 서브넷 255.255.255.0 / 게이트웨이 10.20.3.1');
-  await expect.poll(() => app.evaluate(() => global.__sen.platform._state().clipboard)).toContain('[쎈클린 IP 변경] 3학년 2반');
+  await expect.poll(() => app.evaluate(() => global.__sen.platform._state().clipboard)).toContain('[쎈Clean IP 변경] 3학년 2반');
   await win.keyboard.press('Escape');
   await expect(two).toContainText('변경 대기 → 10.20.3.50');
   await shot('11-network-registry');

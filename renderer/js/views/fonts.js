@@ -9,7 +9,7 @@ export default async function fontsView(ctx) {
   const selected = new Set();
   const loaded = new Set();
   const box = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '14px' } });
-  ctx.main.append(pageHead('폰트', '학교에서 쓰면 저작권 문제가 될 수 있는 폰트를 찾아 정리하고, 학교안심 글꼴을 설치해요.'), box);
+  ctx.main.append(pageHead('폰트 정리', '학교에서 쓰면 저작권 문제가 될 수 있는 폰트를 찾아 정리하고, 학교안심 글꼴을 설치해요.'), box);
 
   async function load() {
     box.replaceChildren(h('section', { class: 'panel pad' }, h('div', { class: 'muted' }, '설치된 폰트를 살펴보고 있어요…')));
@@ -26,7 +26,7 @@ export default async function fontsView(ctx) {
       loaded.add(item.id);
       try { const ff = new FontFace(fam, `url(senfont://${item.id}/)`); ff.load().then((f) => document.fonts.add(f)).catch(() => {}); } catch { /* ignore */ }
     }
-    return h('div', { class: 'font-sample', style: { fontFamily: `"${fam}", var(--ui)` } }, '가나다 쎈클린 ABC 123');
+    return h('div', { class: 'font-sample', style: { fontFamily: `"${fam}", var(--ui)` } }, '가나다 쎈Clean ABC 123');
   }
 
   function itemRow(item) {

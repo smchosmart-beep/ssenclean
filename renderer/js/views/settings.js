@@ -17,7 +17,7 @@ export default async function settingsView(ctx) {
         h('label', {}, 'PC암호 변경 주기'), select([[30, '30일'], [60, '60일'], [90, '90일 (3개월)'], [180, '180일']], s.passwordCycleDays, (v) => save({ passwordCycleDays: Number(v) })),
         h('label', {}, '화면보호기 대기 시간'), select([[5, '5분'], [10, '10분'], [15, '15분']], s.screensaverMinutes, (v) => save({ screensaverMinutes: Number(v) })))),
     h('section', { class: 'panel pad' }, h('div', { class: 'section-title' }, "개인정보 검사에서 '괜찮아요'로 뺀 파일"), exBox),
-    h('section', { class: 'panel pad' }, h('div', { class: 'section-title' }, '쎈클린 원칙'),
+    h('section', { class: 'panel pad' }, h('div', { class: 'section-title' }, '쎈Clean 원칙'),
       h('div', { class: 'muted' }, '회원가입·광고·결제 없음 · 파일은 PC 밖으로 나가지 않음(업데이트 확인에만 인터넷 사용) · 암호를 저장하지 않음 · 지우기 전에 항상 확인')),
   );
 }

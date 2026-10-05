@@ -14,7 +14,7 @@ import network from './views/network.js';
 const MENUS = [
   { id: 'dashboard', label: '점검 현황', icon: 'home', view: dashboard },
   { id: 'privacy', label: '개인정보 파일', icon: 'file', view: privacy },
-  { id: 'fonts', label: '폰트', icon: 'font', view: fonts },
+  { id: 'fonts', label: '폰트 정리', icon: 'font', view: fonts },
   { id: 'password', label: 'PC암호', icon: 'lock', view: password },
   { id: 'screensaver', label: '화면보호기', icon: 'monitor', view: screensaver },
   { id: 'updates', label: '업데이트', icon: 'up', view: updates },

@@ -50,7 +50,7 @@ function validate({ dhcp, ip, mask, gateway, dns1, dns2 }) {
 // ── 메시지 ──
 function teacherMessage(info, room) {
   const lines = [
-    `[쎈클린 IP 정보] ${room || '(교실 이름 없음)'}`,
+    `[쎈Clean IP 정보] ${room || '(교실 이름 없음)'}`,
     `PC이름 ${info.pcName || '-'}`,
     `IP ${info.ip || '-'} / 서브넷 ${info.mask || '-'} / 게이트웨이 ${info.gateway || '-'}`,
     `DNS ${(info.dns || []).filter(Boolean).join(', ') || '-'}`,
@@ -62,10 +62,10 @@ function teacherMessage(info, room) {
 
 function assignMessage({ room, ip, mask, gateway, dns1, dns2 }) {
   return [
-    `[쎈클린 IP 변경] ${room || ''}`.trim(),
+    `[쎈Clean IP 변경] ${room || ''}`.trim(),
     `IP ${ip} / 서브넷 ${mask} / 게이트웨이 ${gateway || '-'}`,
     `DNS ${[dns1, dns2].filter(Boolean).join(', ') || '-'}`,
-    '→ 쎈클린 [IP 주소] → [받은 내용 붙여넣기] 후 [바꾸기]를 누르세요.',
+    '→ 쎈Clean [IP 주소] → [받은 내용 붙여넣기] 후 [바꾸기]를 누르세요.',
   ].join('\n');
 }
 
@@ -73,7 +73,7 @@ function assignMessage({ room, ip, mask, gateway, dns1, dns2 }) {
 function parseMessage(text) {
   const t = String(text || '').replace(/\r/g, '');
   const out = { kind: null, room: '', pcName: '', ip: '', mask: '', gateway: '', dns1: '', dns2: '', mac: '', dhcp: false };
-  const head = t.match(/\[쎈클린 IP (정보|변경)\]\s*([^\n]*)/);
+  const head = t.match(/\[쎈(?:클린|Clean) IP (정보|변경)\]\s*([^\n]*)/) /* 1.3.0 이전 메시지도 읽음 */;
   if (head) { out.kind = head[1] === '정보' ? 'info' : 'assign'; out.room = head[2].trim(); }
   const after = (labelRe) => { const m = t.match(new RegExp(`(?:${labelRe})\\s*[:：=]?\\s*(${IP_RE.source})`, 'i')); return m ? m[0].match(IP_RE)[0] : ''; };
   out.ip = after('(?<![a-z])IP(?:\\s*주소)?|아이피(?:\\s*주소)?');

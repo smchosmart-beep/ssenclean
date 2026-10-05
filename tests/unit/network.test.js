@@ -43,11 +43,12 @@ test('교사: 내 IP 보기·메시지 복사·IP 바꾸기·연결 확인·원�
   assert.strictEqual(i.primary.alias, '이더넷', '가상 어댑터가 아니라 실제 랜 카드');
   assert.strictEqual(i.primary.mask, '255.255.255.0');
   const msg = await svc.myMessage('3학년 2반');
-  assert.ok(msg.includes('[쎈클린 IP 정보] 3학년 2반'));
+  assert.ok(msg.includes('[쎈Clean IP 정보] 3학년 2반'));
   assert.strictEqual(env.platform._state().clipboard, msg);
   assert.strictEqual((await svc.info()).room, '3학년 2반');
 
   // 정보부장 메시지 붙여넣기 → 칸 채움 (게이트웨이 없으면 추천값)
+  // 1.3.0 이전 '[쎈클린 …]' 메시지도 읽어야 한다
   const p = svc.parse('[쎈클린 IP 변경] 3학년 2반\nIP 10.20.3.77 / 서브넷 255.255.255.0\nDNS 10.20.0.1');
   assert.strictEqual(p.gateway, '10.20.3.1');
   assert.deepStrictEqual(p.errors, []);

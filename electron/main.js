@@ -23,7 +23,7 @@ function emit(channel, payload) {
 
 // 개인정보 검사는 별도 프로세스에서 돌려 화면이 멈추지 않게 한다.
 function spawnScan(msg, onEvent) {
-  const child = utilityProcess.fork(path.join(ROOT, 'core', 'privacy', 'scan-worker.js'), [], { serviceName: '쎈클린 검사', stdio: 'ignore' });
+  const child = utilityProcess.fork(path.join(ROOT, 'core', 'privacy', 'scan-worker.js'), [], { serviceName: '쎈Clean 검사', stdio: 'ignore' });
   let finished = false;
   child.on('message', (ev) => {
     if (ev.type === 'done' || ev.type === 'error') { finished = true; setTimeout(() => child.kill(), 200); }
@@ -46,7 +46,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 700,
     backgroundColor: '#F2F0EB',
-    title: '쎈클린',
+    title: '쎈Clean',
     show: false,
     autoHideMenuBar: true,
     icon: path.join(ROOT, 'assets', 'icon.png'),
@@ -63,6 +63,9 @@ function createWindow() {
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file://')) e.preventDefault(); });
   win.loadFile(RENDERER);
 }
+
+// 1.4.0에서 이름이 '쎈클린' → '쎈Clean'으로 바뀌어도 설정·되돌리기 기록은 예전 폴더(%APPDATA%\\쎈클린)를 그대로 쓴다.
+try { app.setPath('userData', path.join(app.getPath('appData'), '쎈클린')); } catch { /* ignore */ }
 
 app.whenReady().then(() => {
   platform = createPlatform({ electron });

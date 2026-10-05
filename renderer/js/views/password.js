@@ -13,7 +13,7 @@ const ERR = {
 
 export default async function passwordView(ctx) {
   const box = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '14px' } });
-  ctx.main.append(pageHead('PC암호', '이 PC에 로그인할 때 쓰는 암호를 확인하고 바꿔요. 쎈클린은 암호를 저장하지 않아요.'), box);
+  ctx.main.append(pageHead('PC암호', '이 PC에 로그인할 때 쓰는 암호를 확인하고 바꿔요. 쎈Clean은 암호를 저장하지 않아요.'), box);
 
   async function openForm(st) {
     const hasPw = st.hasPassword !== false;

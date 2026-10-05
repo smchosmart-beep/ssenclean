@@ -92,7 +92,7 @@ export default async function browserView(ctx) {
     if (info.length) {
       parts.push(h('section', { class: 'panel' },
         h('div', { class: 'section-title', style: { padding: '16px 20px 0' } }, '브라우저 안에서 직접 확인할 것'),
-        h('div', { style: { padding: '8px 20px 0' } }, tip('확장 프로그램과 시작 페이지는 브라우저가 보호하고 있어서 쎈클린이 바꾸지 않아요. [설정 초기화]를 누르면 한 번에 원래대로 돌아가요.')),
+        h('div', { style: { padding: '8px 20px 0' } }, tip('확장 프로그램과 시작 페이지는 브라우저가 보호하고 있어서 쎈Clean이 바꾸지 않아요. [설정 초기화]를 누르면 한 번에 원래대로 돌아가요.')),
         h('div', { class: 'items' }, info.map(itemRow))));
     }
     if (scan.canUndo) parts.push(h('div', { class: 'btn-row' }, btn('undo', '지난 치료 되돌리기', async () => { const r = await api('browser:undo'); if (!r.ok) { toast(r.canceled ? 'Windows 확인 창에서 취소해서 되돌리지 않았어요' : '되돌리지 못했어요'); return; } toast(r.manual ? `되돌렸어요. 휴지통으로 보낸 아이콘 ${r.manual}개는 휴지통에서 꺼내 주세요` : '되돌렸어요'); runScan(); }, { testid: 'ad-undo' })));

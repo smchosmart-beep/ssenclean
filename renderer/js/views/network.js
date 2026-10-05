@@ -139,7 +139,7 @@ export default async function networkView(ctx) {
   }
 
   function renderRegistry(data) {
-    const recv = h('textarea', { class: 'field', placeholder: '교사에게 받은 [쎈클린 IP 정보] 메시지를 여기에 붙여넣으세요', 'data-testid': 'reg-paste' });
+    const recv = h('textarea', { class: 'field', placeholder: '교사에게 받은 [쎈Clean IP 정보] 메시지를 여기에 붙여넣으세요', 'data-testid': 'reg-paste' });
     const save = async (text) => {
       const r = await api('registry:import', text);
       if (!r.ok) { toast('메시지에서 IP나 MAC 주소를 찾지 못했어요'); return; }
