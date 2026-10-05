@@ -2,6 +2,7 @@
 // IP 주소 메뉴. 교사: 내 IP 알려주기·받은 IP로 바꾸기 / 정보부장: 교실별 IP 목록·배정 메시지.
 const crypto = require('crypto');
 const M = require('./network-msg');
+const { summarize, HW_FIELDS } = require('./hardware');
 
 const REGISTRY = 'ip-registry.json';
 const DEFAULTS = { mask: '255.255.255.0', dns1: '', dns2: '', gwRule: '.1' };
@@ -29,8 +30,9 @@ function parseCsv(text) {
 }
 const CSV_COLS = [
   ['room', '교실'], ['pcName', 'PC이름'], ['ip', 'IP'], ['mask', '서브넷'], ['gateway', '게이트웨이'], ['dns1', 'DNS1'], ['dns2', 'DNS2'],
-  ['mac', 'MAC'], ['dhcp', '방식'], ['receivedAt', '받은 날'], ['assignedIp', '배정 IP'], ['assignedAt', '배정한 날'], ['note', '메모'],
+  ['mac', 'MAC'], ['dhcp', '방식'], ...HW_FIELDS.map(([k, l]) => [k, l.replace(/ /g, '')]), ['receivedAt', '받은 날'], ['assignedIp', '배정 IP'], ['assignedAt', '배정한 날'], ['note', '메모'],
 ];
+const SNAPSHOT = 'pc-info.json';
 const day = (t) => (t ? new Date(t).toISOString().slice(0, 10) : '');
 
 function createNetworkService({ platform, store }) {
@@ -54,10 +56,32 @@ function createNetworkService({ platform, store }) {
     return { pcName: platform.user.computer, room: s.room || '', role: s.role || 'user', adapters: physical.length ? physical : list, primary, canUndo: !!store.read('network-undo.json', null) };
   }
 
+  // 화면에 들어올 때마다 다시 읽지 않는다. [불러오기]를 누를 때만 IP·연결·PC 사양을 읽고 저장해 둔다.
+  async function load() {
+    const [i, raw] = await Promise.all([info(), platform.hardware ? platform.hardware().catch(() => null) : null]);
+    const conn = i.primary ? await platform.network.connectivity(i.primary.gateway) : null;
+    const snap = { at: Date.now(), primary: i.primary, adapters: i.adapters, pcName: i.pcName, conn, hardware: summarize(raw) };
+    store.write(SNAPSHOT, snap);
+    return last();
+  }
+
+  function last() {
+    const snap = store.read(SNAPSHOT, null);
+    const s = store.settings.get();
+    return { snapshot: snap, room: s.room || '', role: s.role || 'user', canUndo: !!store.read('network-undo.json', null) };
+  }
+
+  // IP를 바꾼 뒤에는 저장해 둔 IP도 새 값으로
+  function refreshSnapshot(i, conn) {
+    const snap = store.read(SNAPSHOT, null) || { hardware: null };
+    store.write(SNAPSHOT, { ...snap, at: Date.now(), primary: i.primary, adapters: i.adapters, pcName: i.pcName, conn: conn || null });
+  }
+
   async function myMessage(room) {
     if (typeof room === 'string') store.settings.set({ room: room.trim() });
-    const i = await info();
-    const msg = M.teacherMessage({ ...(i.primary || {}), pcName: i.pcName }, i.room);
+    let snap = store.read(SNAPSHOT, null);
+    if (!snap) { await load(); snap = store.read(SNAPSHOT, null); }
+    const msg = M.teacherMessage({ ...(snap.primary || {}), pcName: snap.pcName }, store.settings.get().room || '', snap.hardware);
     platform.clipboard.write(msg);
     return msg;
   }
@@ -94,7 +118,9 @@ function createNetworkService({ platform, store }) {
     const code = await applyWithAdmin(cfg);
     if (code !== 'ok') return { ok: false, code };
     const check = await verify(cfg.dhcp ? null : cfg.gateway);
-    return { ok: true, check, info: await info() };
+    const now = await info();
+    refreshSnapshot(now, check);
+    return { ok: true, check, info: now, last: last() };
   }
 
   async function verify(gateway) {
@@ -115,7 +141,10 @@ function createNetworkService({ platform, store }) {
     const code = await applyWithAdmin({ index: u.index, dhcp: u.dhcp, ip: u.ip, mask: u.mask, gateway: u.gateway, dns1: u.dns1, dns2: u.dns2 });
     if (code !== 'ok') return { ok: false, code };
     store.write('network-undo.json', null);
-    return { ok: true, check: await verify(u.dhcp ? null : u.gateway), info: await info() };
+    const check = await verify(u.dhcp ? null : u.gateway);
+    const now = await info();
+    refreshSnapshot(now, check);
+    return { ok: true, check, info: now, last: last() };
   }
 
   async function check() {
@@ -149,6 +178,7 @@ function createNetworkService({ platform, store }) {
       gateway: p.gateway || pc.gateway || '', dns1: p.dns1 || pc.dns1 || '', dns2: p.dns2 || pc.dns2 || '', mac: mac || pc.mac || '',
       dhcp: !!p.dhcp, receivedAt: Date.now(), source,
     });
+    for (const [k] of HW_FIELDS) if (p.hw && p.hw[k]) pc[k] = p.hw[k];
     // 교사가 배정받은 IP로 바꾼 뒤 다시 보내오면 배정 완료로 정리
     if (pc.assignedIp && pc.assignedIp === pc.ip) { pc.assignedIp = ''; pc.assignedAt = null; pc.appliedAt = Date.now(); }
     return { pc, created };
@@ -236,7 +266,7 @@ function createNetworkService({ platform, store }) {
     let created = 0, updated = 0;
     for (const row of rows.slice(1)) {
       const g = (k) => (idx[k] >= 0 ? (row[idx[k]] || '').trim() : '');
-      const p = { room: g('room'), pcName: g('pcName'), ip: g('ip'), mask: g('mask'), gateway: g('gateway'), dns1: g('dns1'), dns2: g('dns2'), mac: g('mac'), dhcp: g('dhcp') === '자동' };
+      const p = { room: g('room'), pcName: g('pcName'), ip: g('ip'), mask: g('mask'), gateway: g('gateway'), dns1: g('dns1'), dns2: g('dns2'), mac: g('mac'), dhcp: g('dhcp') === '자동', hw: Object.fromEntries(HW_FIELDS.map(([k]) => [k, g(k)])) };
       if (!p.ip && !p.mac) continue;
       const res = upsert(r, p, 'csv');
       if (g('note')) res.pc.note = g('note');
@@ -248,7 +278,7 @@ function createNetworkService({ platform, store }) {
   }
 
   return {
-    info, myMessage, parse, apply, undo, check,
+    info, load, last, myMessage, parse, apply, undo, check,
     registryList, registryImport, registryUpdate, registryDelete, setDefaults, assign, exportCsv, importCsv,
   };
 }

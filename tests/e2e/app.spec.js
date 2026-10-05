@@ -39,6 +39,7 @@ test('대시보드: 메뉴 순서대로 고정, 점검 중 표시', async () => 
   await expect(win.getByTestId('recheck')).toHaveText('다시 점검');
   const ids = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
   expect(ids).toEqual(['dash-privacy', 'dash-fonts', 'dash-password', 'dash-screensaver', 'dash-updates', 'dash-cdrive', 'dash-browser', 'dash-desktop', 'dash-network']);
+  await expect(win.getByTestId('dash-network')).toContainText('아직 불러오지 않았어요');
   const nav = await win.locator('#nav .btn').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
   expect(nav).toEqual(['nav-dashboard', 'nav-privacy', 'nav-fonts', 'nav-password', 'nav-screensaver', 'nav-updates', 'nav-cdrive', 'nav-browser', 'nav-desktop', 'nav-network']);
   await expect(win.getByTestId('dash-fonts')).toContainText('사용 주의 폰트 3개');
@@ -263,10 +264,22 @@ test('브라우저 청소: 광고 치료 → 기록 지우기', async () => {
 
 test('IP 주소: 교사 - 내 IP 복사 → 받은 메시지 붙여넣기 → 바꾸기 → 원래대로', async () => {
   await win.getByTestId('nav-network').click();
+  // 들어오기만 하면 읽지 않고, [불러오기]를 눌러야 IP·사양을 읽는다
+  await expect(win.getByTestId('net-hero')).toContainText('내 PC 정보를 불러오세요');
+  expect((await mockLog()).some((l) => l.op === 'hardware')).toBeFalsy();
+  await win.getByTestId('net-load').click();
   await expect(win.getByTestId('net-hero')).toContainText('10.20.3.42', { timeout: 15000 });
+  await expect(win.getByTestId('net-hw')).toContainText('Intel Core i5-12400');
+  await expect(win.getByTestId('net-hw')).toContainText('Samsung M2020 Series');
   await win.getByTestId('net-room').fill('3학년 2반');
   await win.getByTestId('net-copy').click();
   await expect.poll(() => app.evaluate(() => global.__sen.platform._state().clipboard)).toContain('[쎈Clean IP 정보] 3학년 2반');
+  await expect.poll(() => app.evaluate(() => global.__sen.platform._state().clipboard)).toContain('RAM 16GB');
+  // 다른 메뉴에 갔다 와도 다시 읽지 않음
+  await win.getByTestId('nav-dashboard').click();
+  await win.getByTestId('nav-network').click();
+  await expect(win.getByTestId('net-hero')).toContainText('10.20.3.42');
+  expect((await mockLog()).filter((l) => l.op === 'hardware').length).toBe(1);
   await shot('09-network-mine');
   // 정보부장이 보낸 메시지가 클립보드에 있다고 치고 [받은 내용 붙여넣기]
   await app.evaluate(() => { global.__sen.platform.clipboard.write('[쎈클린 IP 변경] 3학년 2반\nIP 10.20.3.77 / 서브넷 255.255.255.0 / 게이트웨이 10.20.3.1\nDNS 10.20.0.1, 10.20.0.2'); });
@@ -294,11 +307,15 @@ test('IP 주소: 정보부장 - 받은 내용 저장 → 교실 목록 → IP �
   await win.getByTestId('nav-network').click();
   await win.getByTestId('tab-registry').click();
   // 교사가 보낸 메시지(앞 테스트에서 복사한 내용 형식)
-  await app.evaluate(() => { global.__sen.platform.clipboard.write('[쎈Clean IP 정보] 3학년 2반\nPC이름 SM-3-2\nIP 10.20.3.42 / 서브넷 255.255.255.0 / 게이트웨이 10.20.3.1\nDNS 10.20.0.1, 10.20.0.2\nMAC 00-1A-2B-3C-4D-5E\n방식 고정 IP'); });
+  await app.evaluate(() => { global.__sen.platform.clipboard.write('[쎈Clean IP 정보] 3학년 2반\nPC이름 SM-3-2\nIP 10.20.3.42 / 서브넷 255.255.255.0 / 게이트웨이 10.20.3.1\nDNS 10.20.0.1, 10.20.0.2\nMAC 00-1A-2B-3C-4D-5E\n방식 고정 IP\n── PC 사양 ──\nPC 모델 SAMSUNG DM500TDA\nCPU Intel Core i5-12400 @ 2.50GHz\nRAM 16GB\nSSD SAMSUNG MZVL2512HCJQ-00B07 (SSD 512GB)\n모니터 삼성 S24R35x\n프린터 Samsung M2020 Series (기본)'); });
   await win.getByTestId('reg-paste-save').click();
   await app.evaluate(() => { global.__sen.platform.clipboard.write('[쎈클린 IP 정보] 3학년 1반\nPC이름 SM-3-1\nIP 10.20.3.41 / 서브넷 255.255.255.0 / 게이트웨이 10.20.3.1\nMAC AA-BB-CC-DD-EE-01'); });
   await win.getByTestId('reg-paste-save').click();
   await expect(win.getByTestId('reg-item')).toHaveCount(2);
+  await expect(win.getByTestId('reg-item').filter({ hasText: '3학년 2반' }).getByTestId('reg-hw')).toContainText('CPU Intel Core i5-12400');
+  await win.getByTestId('reg-search').fill('M2020');
+  await expect(win.getByTestId('reg-item')).toHaveCount(1);
+  await win.getByTestId('reg-search').fill('');
   await win.getByTestId('def-dns1').fill('10.20.0.1');
   await win.getByTestId('def-save').click();
   const two = win.getByTestId('reg-item').filter({ hasText: '3학년 2반' });

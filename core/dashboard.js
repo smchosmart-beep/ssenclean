@@ -69,13 +69,14 @@ function createDashboard(s) {
       return card('privacy', 'ok', '개인정보 파일 - 0개', `지난 검사 ${fmtDate(last.at)}`, scan);
     },
     async network() {
-      const i = await s.network.info();
+      // 점검 때마다 IP를 읽지 않는다. [IP 주소] 화면에서 불러온 값을 보여 준다.
+      const l = s.network.last();
+      const snap = l.snapshot;
       const go = { kind: 'navigate', target: 'network', label: '자세히', icon: 'link' };
-      if (!i.primary) return card('network', 'warn', '네트워크에 연결되어 있지 않아요', '랜선이나 와이파이 연결을 확인해 주세요.', go);
-      const c = await s.network.check();
-      const mode = i.primary.dhcp ? '자동 IP' : '고정 IP';
-      if (!c.internet) return card('network', 'warn', `IP ${i.primary.ip} - 인터넷 연결이 안 돼요`, `${mode} · IP 설정을 정보부장에게 확인해 보세요.`, { ...go, label: 'IP 확인' });
-      return card('network', 'info', `IP ${i.primary.ip}`, `${mode} · 인터넷 연결됨${i.room ? ` · ${i.room}` : ''}`, go);
+      if (!snap) return card('network', 'info', 'IP 주소·PC 사양 - 아직 불러오지 않았어요', '[IP 주소]에서 [불러오기]를 누르면 IP와 CPU·RAM·SSD·모니터·프린터를 확인해요.', { ...go, label: '불러오기' });
+      if (!snap.primary) return card('network', 'warn', '네트워크에 연결되어 있지 않았어요', `${fmtDate(snap.at)}에 불러온 내용이에요.`, go);
+      const mode = snap.primary.dhcp ? '자동 IP' : '고정 IP';
+      return card('network', 'info', `IP ${snap.primary.ip}`, `${mode}${l.room ? ` · ${l.room}` : ''} · ${fmtDate(snap.at)}에 불러옴`, go);
     },
     async cdrive() {
       const st = s.cdrive.status();

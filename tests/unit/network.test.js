@@ -134,3 +134,62 @@ test('정보부장: 교실별 IP 저장·갱신·중복 경고·배정 메시지
   svc2.registryDelete(svc2.registryList().pcs[0].id);
   assert.strictEqual(svc2.registryList().pcs.length, 1);
 });
+
+test('불러오기는 버튼을 누를 때만, PC 사양을 메시지·대장·CSV에 함께', async (t) => {
+  const { summarize, gbDecimal } = require('../../core/hardware');
+  const env = freshEnv();
+  t.after(env.cleanup);
+  const svc = createNetworkService(env);
+  // 화면에 들어오기만 하면 아무것도 읽지 않는다
+  const l0 = svc.last();
+  assert.strictEqual(l0.snapshot, null);
+  assert.ok(!env.platform._log().some((x) => x.op === 'hardware'));
+
+  const l = await svc.load();
+  const hw = l.snapshot.hardware;
+  assert.strictEqual(l.snapshot.primary.ip, '10.20.3.42');
+  assert.strictEqual(hw.pcModel, 'SAMSUNG DM500TDA');
+  assert.strictEqual(hw.cpu, 'Intel Core i5-12400 @ 2.50GHz');
+  assert.strictEqual(hw.ram, '16GB (8GB×2 삼성 M378A1K43EB2-CWE 3200MHz)');
+  assert.strictEqual(hw.ssd, 'SAMSUNG MZVL2512HCJQ-00B07 (SSD 512GB)', 'USB 메모리는 빼기');
+  assert.strictEqual(hw.monitor, '삼성 S24R35x / LG FHD');
+  assert.strictEqual(hw.printer, 'Samsung M2020 Series (기본) / Canon iR-ADV C3525 UFR II', 'PDF 저장 같은 가상 프린터는 빼기');
+  assert.strictEqual(svc.last().snapshot.at, l.snapshot.at, '다시 들어와도 저장한 값 그대로');
+
+  const msg = await svc.myMessage('3학년 2반');
+  assert.ok(msg.includes('── PC 사양 ──\nPC 모델 SAMSUNG DM500TDA\nCPU Intel Core i5-12400'));
+  assert.strictEqual(env.platform._log().filter((x) => x.op === 'hardware').length, 1, '복사할 때 다시 읽지 않음');
+
+  // 정보부장이 붙여넣으면 대장에 사양까지 기록
+  const r = svc.registryImport(msg);
+  assert.ok(r.ok && r.created);
+  const pc = svc.registryList().pcs[0];
+  assert.strictEqual(pc.ip, '10.20.3.42');
+  assert.strictEqual(pc.cpu, hw.cpu);
+  assert.strictEqual(pc.printer, hw.printer);
+  // 메신저가 구분선을 없애도 줄 이름으로 읽는다
+  const p = M.parseMessage(msg.replace('── PC 사양 ──\n', ''));
+  assert.strictEqual(p.hw.monitor, hw.monitor);
+  assert.strictEqual(p.ip, '10.20.3.42');
+  // 예전(사양 없는) 메시지로 다시 받아도 사양은 지우지 않음
+  svc.registryImport(msg.split('── PC 사양 ──')[0]);
+  assert.strictEqual(svc.registryList().pcs[0].ram, hw.ram);
+
+  const csv = svc.exportCsv();
+  assert.ok(parseCsv(csv)[0].join(',').includes('PC모델,CPU,RAM,SSD,모니터,프린터'));
+  const env2 = freshEnv();
+  t.after(env2.cleanup);
+  const svc2 = createNetworkService(env2);
+  svc2.importCsv(csv);
+  assert.strictEqual(svc2.registryList().pcs[0].ssd, hw.ssd);
+
+  // IP를 바꾸면 저장한 IP도 새 값으로, 사양은 그대로
+  await svc.apply({ index: 12, ip: '10.20.3.77', mask: '255.255.255.0', gateway: '10.20.3.1', dns1: '10.20.0.1' });
+  assert.strictEqual(svc.last().snapshot.primary.ip, '10.20.3.77');
+  assert.strictEqual(svc.last().snapshot.hardware.cpu, hw.cpu);
+
+  // 사양을 못 읽어도 IP는 보여 줌
+  assert.strictEqual(summarize(null), null);
+  assert.strictEqual(gbDecimal(1000204886016), '1TB');
+  assert.strictEqual(summarize({ monitors: [{ maker: 'BOE', name: '', code: '0A9D' }] }).monitor, 'BOE (제품코드 0A9D)');
+});

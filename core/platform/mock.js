@@ -315,6 +315,7 @@ function createMockPlatform({ root, seed = true } = {}) {
         return { gateway: gateway ? ok : null, internet: ok };
       },
     },
+    async hardware() { log({ op: 'hardware' }); return state.hardware ? JSON.parse(JSON.stringify(state.hardware)) : null; },
     clipboard: {
       write: (t) => { state.clipboard = String(t); save(); },
       read: () => state.clipboard || '',

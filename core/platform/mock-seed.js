@@ -155,6 +155,14 @@ function seedMock(root, P) {
     offline: false,
     chromeLatest: '141.0.7390.65',
     chromeUpdate: { available: true, version: '140.0.7339.128' },
+    hardware: {
+      maker: 'SAMSUNG ELECTRONICS CO., LTD.', model: 'DM500TDA', ramTotal: 17012588544,
+      cpu: ['Intel(R) Core(TM) i5-12400 CPU @ 2.50GHz'],
+      ram: [{ maker: '80CE', part: 'M378A1K43EB2-CWE    ', size: 8589934592, speed: 3200 }, { maker: '80CE', part: 'M378A1K43EB2-CWE', size: 8589934592, speed: 3200 }],
+      disks: [{ model: 'SAMSUNG MZVL2512HCJQ-00B07', media: 'SSD', bus: 'NVMe', size: 512110190592 }, { model: 'SanDisk Ultra USB 3.0', media: 'Unspecified', bus: 'USB', size: 32015679488 }],
+      monitors: [{ maker: 'SAM', name: 'S24R35x', code: '7192', serial: 'H4ZR' }, { maker: 'GSM', name: 'LG FHD', code: '5B7F', serial: '' }],
+      printers: [{ name: '교실 프린터', driver: 'Samsung M2020 Series', port: 'USB001', network: false, isDefault: true }, { name: 'Microsoft Print to PDF', driver: 'Microsoft Print To PDF', port: 'PORTPROMPT:', network: false, isDefault: false }, { name: '\\\\print\\교무실 복합기', driver: 'Canon iR-ADV C3525 UFR II', port: '10.20.0.200', network: true, isDefault: false }],
+    },
     network: {
       reachable: ['10.20.3.1', '10.20.3.254'],
       adapters: [

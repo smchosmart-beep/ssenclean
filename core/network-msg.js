@@ -48,7 +48,10 @@ function validate({ dhcp, ip, mask, gateway, dns1, dns2 }) {
 }
 
 // ── 메시지 ──
-function teacherMessage(info, room) {
+const { HW_FIELDS } = require('./hardware');
+const HW_MARK = '── PC 사양 ──';
+
+function teacherMessage(info, room, hw) {
   const lines = [
     `[쎈Clean IP 정보] ${room || '(교실 이름 없음)'}`,
     `PC이름 ${info.pcName || '-'}`,
@@ -57,6 +60,10 @@ function teacherMessage(info, room) {
     `MAC ${info.mac || '-'}`,
     `방식 ${info.dhcp ? '자동(DHCP)' : '고정 IP'}`,
   ];
+  if (hw) {
+    lines.push(HW_MARK);
+    for (const [k, label] of HW_FIELDS) lines.push(`${label} ${hw[k] || '-'}`);
+  }
   return lines.join('\n');
 }
 
@@ -71,8 +78,16 @@ function assignMessage({ room, ip, mask, gateway, dns1, dns2 }) {
 
 // 사람이 쓴 메시지도 최대한 읽는다. → { kind, room, pcName, ip, mask, gateway, dns1, dns2, mac, dhcp }
 function parseMessage(text) {
-  const t = String(text || '').replace(/\r/g, '');
+  const all = String(text || '').replace(/\r/g, '');
   const out = { kind: null, room: '', pcName: '', ip: '', mask: '', gateway: '', dns1: '', dns2: '', mac: '', dhcp: false };
+  // PC 사양 줄: 'CPU …', 'RAM …' 처럼 줄 맨 앞의 이름으로 읽는다. IP는 사양 앞부분에서만 찾는다(프린터 주소 등과 헷갈리지 않게).
+  const cut = all.indexOf(HW_MARK);
+  const t = cut >= 0 ? all.slice(0, cut) : all;
+  const hwPart = cut >= 0 ? all.slice(cut) : all;
+  for (const [k, label] of HW_FIELDS) {
+    const m = hwPart.match(new RegExp(`^\\s*${label.replace(/ /g, '\\s*')}\\s*[:：]?\\s+(.+)$`, 'im'));
+    if (m && m[1].trim() !== '-') { out.hw = out.hw || {}; out.hw[k] = m[1].trim(); }
+  }
   const head = t.match(/\[쎈(?:클린|Clean) IP (정보|변경)\]\s*([^\n]*)/) /* 1.3.0 이전 메시지도 읽음 */;
   if (head) { out.kind = head[1] === '정보' ? 'info' : 'assign'; out.room = head[2].trim(); }
   const after = (labelRe) => { const m = t.match(new RegExp(`(?:${labelRe})\\s*[:：=]?\\s*(${IP_RE.source})`, 'i')); return m ? m[0].match(IP_RE)[0] : ''; };
@@ -100,4 +115,4 @@ function parseMessage(text) {
   return out;
 }
 
-module.exports = { isIp, maskToPrefix, prefixToMask, suggestGateway, validate, teacherMessage, assignMessage, parseMessage, normMac, toInt };
+module.exports = { HW_MARK, isIp, maskToPrefix, prefixToMask, suggestGateway, validate, teacherMessage, assignMessage, parseMessage, normMac, toInt };

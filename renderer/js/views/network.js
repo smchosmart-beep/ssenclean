@@ -1,5 +1,6 @@
 import { h, btn, api, hero, pageHead, tip, toast, confirmDialog, modal, statusRow, radio, select, emptyState, fmtDate, icon, pendingCard } from '../ui.js';
 
+const HW = [['pcModel', 'PC 모델'], ['cpu', 'CPU'], ['ram', 'RAM'], ['ssd', 'SSD'], ['monitor', '모니터'], ['printer', '프린터']];
 const FIELDS = [['ip', 'IP 주소', '예: 10.20.3.42'], ['mask', '서브넷 마스크', '255.255.255.0'], ['gateway', '기본 게이트웨이', '예: 10.20.3.1'], ['dns1', '기본 DNS 서버', ''], ['dns2', '보조 DNS 서버', '(없으면 비워 두세요)']];
 const input = (value, opts = {}) => { const el = h('input', { class: 'field', type: 'text', inputmode: 'decimal', autocomplete: 'off', spellcheck: 'false', ...opts }); el.value = value || ''; return el; };
 
@@ -8,37 +9,57 @@ export default async function networkView(ctx) {
   let tab = settings.role === 'admin' && ctx.params.tab !== 'mine' ? (ctx.params.tab || 'mine') : 'mine';
   const tabsEl = h('div', { class: 'tabs' });
   const box = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '14px' } });
-  ctx.main.append(pageHead('IP 주소', settings.role === 'admin' ? '내 PC의 IP를 확인하고, 교실별 IP를 관리해요.' : '내 PC의 IP를 정보부장에게 알려 주고, 받은 IP로 바꿔요.', tabsEl), box);
+  ctx.main.append(pageHead('IP 주소', settings.role === 'admin' ? '내 PC의 IP·사양을 확인하고, 교실별 IP·PC 대장을 관리해요.' : '내 PC의 IP와 사양(CPU·RAM·SSD·모니터·프린터)을 정보부장에게 알려 주고, 받은 IP로 바꿔요.', tabsEl), box);
 
   function renderTabs() {
     if (settings.role !== 'admin') { tabsEl.replaceChildren(); return; }
     tabsEl.replaceChildren(
       btn('monitor', '내 PC', () => { tab = 'mine'; renderTabs(); show(); }, { variant: tab === 'mine' ? 'on' : '', testid: 'tab-mine' }),
-      btn('network', '교실 IP 관리', () => { tab = 'registry'; renderTabs(); show(); }, { variant: tab === 'registry' ? 'on' : '', testid: 'tab-registry' }));
+      btn('network', '교실 IP·PC 대장', () => { tab = 'registry'; renderTabs(); show(); }, { variant: tab === 'registry' ? 'on' : '', testid: 'tab-registry' }));
   }
 
   // ───────────── 내 PC ─────────────
+  // 화면에 들어올 때는 저장해 둔 값만 보여 주고, [불러오기]를 눌러야 새로 읽는다.
+  let last = null; // { snapshot, room, role, canUndo }
   let info = null;
   let form = null; // { dhcp, ip, mask, gateway, dns1, dns2 }
   let result = null;
 
   async function loadMine() {
-    box.replaceChildren(pendingCard('IP 주소 확인 중…', '네트워크와 인터넷 연결을 확인하고 있어요'));
-    info = await api('network:info');
-    const conn = info.primary ? await api('network:check') : null;
-    renderMine(conn);
+    last = await api('network:last');
+    renderMine();
   }
 
-  function renderMine(conn) {
+  async function fetchNow() {
+    box.replaceChildren(pendingCard('불러오는 중…', 'IP 주소와 CPU·RAM·SSD·모니터·프린터를 확인하고 있어요'));
+    last = await api('network:load');
+    form = null; result = null;
+    renderMine();
+    toast('불러왔어요');
+  }
+
+  const when = (t) => { const d = new Date(t); return `${d.getMonth() + 1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  const loadBtn = (label, variant) => btn('refresh', label, fetchNow, { variant, testid: 'net-load' });
+
+  function renderMine() {
+    const snap = last.snapshot;
+    if (!snap) {
+      const start = hero({ level: 'info', iconName: 'network', title: '내 PC 정보를 불러오세요', desc: '[불러오기]를 누르면 IP 주소와 CPU·RAM·SSD·모니터·프린터 모델명을 확인해요. 10초쯤 걸려요.', right: loadBtn('불러오기', 'primary') });
+      start.setAttribute('data-testid', 'net-hero');
+      box.replaceChildren(start);
+      return;
+    }
+    info = { pcName: snap.pcName, primary: snap.primary, room: last.room, canUndo: last.canUndo };
+    const conn = snap.conn;
     const p = info.primary;
-    if (!p) { box.replaceChildren(hero({ level: 'warn', iconName: 'network', title: '네트워크에 연결되어 있지 않아요', desc: '랜선이나 와이파이 연결을 확인해 주세요.' })); return; }
+    if (!p) { box.replaceChildren(hero({ level: 'warn', iconName: 'network', title: '네트워크에 연결되어 있지 않아요', desc: `랜선이나 와이파이 연결을 확인하고 다시 불러오세요. (${when(snap.at)})`, right: loadBtn('다시 불러오기') })); return; }
     const ok = conn && conn.internet;
     ctx.setDot('network', ok ? 'ok' : 'warn');
     const top = hero({
       level: ok ? 'ok' : 'warn', iconName: 'network',
       title: '내 IP는 {}예요', titleEmph: p.ip,
-      desc: `${p.dhcp ? '자동 IP' : '고정 IP'} · ${conn == null ? '연결 확인 중' : ok ? '인터넷 연결됨' : '인터넷 연결이 안 돼요'} · ${p.alias}`,
-      right: btn('refresh', '다시 확인', loadMine, { testid: 'net-recheck' }),
+      desc: `${p.dhcp ? '자동 IP' : '고정 IP'} · ${conn == null ? '연결 확인 안 함' : ok ? '인터넷 연결됨' : '인터넷 연결이 안 돼요'} · ${p.alias} · ${when(snap.at)}에 불러옴`,
+      right: loadBtn('다시 불러오기'),
     });
     top.setAttribute('data-testid', 'net-hero');
 
@@ -47,10 +68,17 @@ export default async function networkView(ctx) {
     const kv = h('dl', { class: 'kv', style: { gridTemplateColumns: '130px 1fr' } },
       ...[['PC 이름', info.pcName], ['IP 주소', p.ip], ['서브넷 마스크', p.mask], ['기본 게이트웨이', p.gateway || '-'], ['DNS 서버', p.dns.join(', ') || '-'], ['MAC 주소', p.mac], ['방식', p.dhcp ? '자동(DHCP)' : '고정 IP']]
         .flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)]));
+    const hw = snap.hardware;
+    const multi = (v) => h('dd', { style: { whiteSpace: 'pre-line' } }, v ? v.split(' / ').join('\n') : '-');
+    const hwKv = h('dl', { class: 'kv', style: { gridTemplateColumns: '130px 1fr' }, 'data-testid': 'net-hw' },
+      ...HW.flatMap(([k, label]) => [h('dt', {}, label), multi(hw && hw[k])]));
     const tell = h('section', { class: 'panel pad' },
       h('div', { class: 'section-title' }, '정보부장에게 알려주기'),
+      h('div', { class: 'muted small', style: { marginBottom: '14px' } }, 'IP 주소와 PC 사양을 한 번에 복사해요. 정보부장이 붙여넣으면 교실 IP 대장에 자동으로 적혀요.'),
       h('div', { class: 'btn-row', style: { marginBottom: '16px' } }, h('label', { style: { width: '130px' } }, '우리 교실'), room),
       kv,
+      h('div', { class: 'section-title', style: { margin: '20px 0 10px', fontSize: '15px' } }, 'PC 사양'),
+      hw ? hwKv : h('div', { class: 'muted small' }, 'PC 사양을 읽지 못했어요. [다시 불러오기]를 눌러 보세요.'),
       h('div', { class: 'btn-row', style: { marginTop: '18px' } },
         btn('copy', '정보부장에게 보낼 내용 복사', async () => { await api('network:myMessage', room.value); toast('복사했어요. 메신저에 붙여넣어 정보부장에게 보내세요'); }, { variant: 'primary', testid: 'net-copy' })));
 
@@ -78,7 +106,7 @@ export default async function networkView(ctx) {
       const r = await api('network:parse', text);
       if (!r.found) { toast('메시지에서 IP 주소를 찾지 못했어요'); return; }
       form = { dhcp: r.dhcp, ip: r.ip, mask: r.mask, gateway: r.gateway, dns1: r.dns1, dns2: r.dns2 };
-      renderMine(conn);
+      renderMine();
       toast('받은 내용으로 칸을 채웠어요. 확인하고 [바꾸기]를 누르세요');
     };
     paste.addEventListener('paste', () => setTimeout(() => fill(paste.value), 0));
@@ -111,14 +139,14 @@ export default async function networkView(ctx) {
             await confirmDialog({ title: '바꾸지 못했어요', body: msg, okLabel: '알겠어요', cancelLabel: '닫기' });
             return;
           }
-          info = r.info; form = null; result = r.check;
-          renderMine(r.check);
+          last = r.last; form = null; result = r.check;
+          renderMine();
         }, { variant: 'primary', testid: 'net-apply' }),
         info.canUndo ? btn('undo', '원래대로', async () => {
           const ok = await confirmDialog({ title: '바꾸기 전 설정으로 되돌릴까요?', okLabel: '되돌리기', okIcon: 'undo' });
           if (!ok) return;
           const r = await api('network:undo');
-          if (r.ok) { info = r.info; form = null; result = r.check; toast('원래 설정으로 되돌렸어요'); renderMine(r.check); } else toast('되돌리지 못했어요');
+          if (r.ok) { last = r.last; form = null; result = r.check; toast('원래 설정으로 되돌렸어요'); renderMine(); } else toast('되돌리지 못했어요');
         }, { testid: 'net-undo' }) : null));
 
     const resultBox = result ? h('section', { class: `panel pad tone-${result.internet ? 'ok' : 'warn'}`, 'data-testid': 'net-result' },
@@ -139,7 +167,7 @@ export default async function networkView(ctx) {
   }
 
   function renderRegistry(data) {
-    const recv = h('textarea', { class: 'field', placeholder: '교사에게 받은 [쎈Clean IP 정보] 메시지를 여기에 붙여넣으세요', 'data-testid': 'reg-paste' });
+    const recv = h('textarea', { class: 'field', placeholder: '교사에게 받은 [쎈Clean IP 정보] 메시지를 여기에 붙여넣으세요 (IP와 PC 사양이 대장에 함께 적혀요)', 'data-testid': 'reg-paste' });
     const save = async (text) => {
       const r = await api('registry:import', text);
       if (!r.ok) { toast('메시지에서 IP나 MAC 주소를 찾지 못했어요'); return; }
@@ -172,11 +200,11 @@ export default async function networkView(ctx) {
         toast(r.ok ? '학교 기본값을 저장했어요' : '숫자 형식을 확인해 주세요');
       }, { testid: 'def-save' })));
 
-    const search = input(query, { inputmode: 'text', placeholder: '교실·IP·MAC 찾기', class: 'field search', 'data-testid': 'reg-search' });
+    const search = input(query, { inputmode: 'text', placeholder: '교실·IP·MAC·모델 찾기', class: 'field search', 'data-testid': 'reg-search' });
     const listBox = h('div', { class: 'items', 'data-testid': 'reg-list' });
     const drawList = () => {
       const q = query.toLowerCase();
-      const pcs = data.pcs.filter((pc) => !q || [pc.room, pc.pcName, pc.ip, pc.assignedIp, pc.mac, pc.note].some((v) => (v || '').toLowerCase().includes(q)));
+      const pcs = data.pcs.filter((pc) => !q || [pc.room, pc.pcName, pc.ip, pc.assignedIp, pc.mac, pc.note, ...HW.map(([k]) => pc[k])].some((v) => (v || '').toLowerCase().includes(q)));
       listBox.replaceChildren(...(pcs.length ? pcs.map(pcRow) : [emptyState(data.pcs.length ? '찾는 교실이 없어요' : '아직 저장한 교실이 없어요', data.pcs.length ? null : '교사에게 받은 메시지를 위에 붙여넣어 저장해 보세요.')]));
     };
     search.addEventListener('input', () => { query = search.value.trim(); drawList(); });
@@ -192,6 +220,7 @@ export default async function networkView(ctx) {
         h('div', { class: 'tx' },
           h('strong', {}, `${pc.room || '(교실 이름 없음)'}${pc.pcName ? ` · ${pc.pcName}` : ''}`),
           h('span', {}, `IP ${pc.ip || '-'} · MAC ${pc.mac || '-'} · ${pc.receivedAt ? `받은 날 ${fmtDate(pc.receivedAt)}` : ''}${pc.note ? ` · ${pc.note}` : ''}`),
+          HW.some(([k]) => pc[k]) ? h('span', { class: 'muted small', 'data-testid': 'reg-hw', style: { whiteSpace: 'normal' } }, HW.filter(([k]) => pc[k]).map(([k, l]) => `${l} ${pc[k]}`).join(' · ')) : null,
           tags.length ? h('div', { class: 'counts' }, tags) : null),
         btn('network', 'IP 배정', () => assignModal(pc, data.defaults), { testid: 'reg-assign' }),
         btn('edit', '고치기', () => editModal(pc), { testid: 'reg-edit' }));
@@ -199,7 +228,7 @@ export default async function networkView(ctx) {
 
     const list = h('section', { class: 'panel' },
       h('div', { class: 'btn-row', style: { padding: '14px 20px', borderBottom: '1px solid var(--hairline)' } },
-        h('div', { class: 'section-title', style: { margin: 0, flex: '1' } }, `교실 IP 목록 ${data.pcs.length}대`),
+        h('div', { class: 'section-title', style: { margin: 0, flex: '1' } }, `교실 IP·PC 대장 ${data.pcs.length}대`),
         search,
         btn('download', '엑셀(CSV)로 저장', async () => { const r = await api('registry:exportCsv'); if (r.ok) toast('저장했어요'); }, { testid: 'reg-export' }),
         btn('up', 'CSV 가져오기', async () => {

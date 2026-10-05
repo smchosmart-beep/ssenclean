@@ -136,6 +136,8 @@ function createServices({ platform, spawnScan, emit }) {
     'app:copy': (text) => { platform.clipboard.write(String(text || '')); return true; },
     'app:paste': () => platform.clipboard.read(),
     'network:info': () => s.network.info(),
+    'network:load': () => s.network.load(),
+    'network:last': () => s.network.last(),
     'network:myMessage': (room) => s.network.myMessage(room),
     'network:parse': (text) => s.network.parse(String(text || '')),
     'network:apply': (cfg) => s.network.apply(cfg || {}),

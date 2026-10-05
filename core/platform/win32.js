@@ -7,6 +7,7 @@ const native = require('./native');
 const { runPowerShell, psQuote, run, launch } = require('./exec');
 const { createChromeUpdater } = require('./google-update');
 const networkWin = require('./network-win');
+const hardwareWin = require('./hardware-win');
 const { runElevated } = require('./elevate-win');
 
 function createWin32Platform({ electron }) {
@@ -179,6 +180,7 @@ ConvertTo-Json -InputObject @($r) -Depth 5 -Compress`, { timeoutMs: 45000 });
     windowsUpdate,
     chromeUpdate: createChromeUpdater(),
     network: { adapters: networkWin.adapters, apply: networkWin.apply, applyElevated: (cfg) => networkWin.applyElevated(cfg, runElevated), connectivity: networkWin.connectivity },
+    hardware: hardwareWin.hardware,
     elevated: (ops) => runElevated(ops),
     // 더블클릭과 같은 방식(ShellExecute)으로 실행: 관리자 권한이 필요한 프로그램이면 Windows 확인 창이 뜬다
     shellRun: async (file, args) => {
