@@ -143,3 +143,43 @@ test('같은 파일 묶음: (1)·복사본 표시를 떼고 이름·크기가 �
     assert.ok(z.every((r) => r.dup === 3));
   } finally { env.cleanup(); }
 });
+
+test('휴지통: 모든 드라이브 휴지통을 합쳐 보여 주고 모두 비움, 일부 실패 안내', async () => {
+  const env = freshEnv();
+  try {
+    const s = createCdriveService(env);
+    const P = env.platform.paths;
+    fs.mkdirSync(P.trash, { recursive: true });
+    fs.writeFileSync(path.join(P.trash, 'c1.mp4'), Buffer.alloc(3000));
+    const dBin = path.join(P.dDrive, '$Recycle.Bin');
+    fs.mkdirSync(dBin, { recursive: true });
+    fs.writeFileSync(path.join(dBin, 'd1.mp4'), Buffer.alloc(5000));
+    const st = s.status().recycle;
+    assert.strictEqual(st.count, 2);
+    assert.strictEqual(st.size, 8000);
+    assert.strictEqual(st.cSize, 3000);
+    assert.deepStrictEqual(st.drives.map((d) => d.letter).sort(), ['C', 'D']);
+    const r = s.emptyRecycle();
+    assert.deepStrictEqual([r.ok, r.left], [true, 0]);
+    assert.strictEqual(s.status().recycle.size, 0);
+    // 사용 중인 파일이 남으면 일부 실패
+    fs.writeFileSync(path.join(dBin, 'busy.mp4'), 'x');
+    env.platform._state().lockedFiles.push(path.join(dBin, 'busy.mp4'));
+    const r2 = s.emptyRecycle();
+    assert.deepStrictEqual([r2.ok, r2.partial, r2.left], [false, true, 1]);
+  } finally { env.cleanup(); }
+});
+
+test('같은 파일: 이름·크기가 같아도 내용이 다르면 표시하지 않음', async () => {
+  const env = freshEnv();
+  try {
+    const dl = env.platform.paths.downloads;
+    fs.writeFileSync(path.join(dl, 'review-setup.exe'), Buffer.alloc(6 * MB, 0x41));
+    fs.writeFileSync(path.join(dl, 'review-setup (1).exe'), Buffer.alloc(6 * MB, 0x42));
+    fs.writeFileSync(path.join(dl, 'review-setup (2).exe'), Buffer.alloc(6 * MB, 0x41));
+    const s = createCdriveService(env);
+    const { results } = await s.scan();
+    const by = Object.fromEntries(results.filter((r) => r.name.startsWith('review-setup')).map((r) => [r.name, r.dup]));
+    assert.deepStrictEqual(by, { 'review-setup.exe': 2, 'review-setup (1).exe': undefined, 'review-setup (2).exe': 2 });
+  } finally { env.cleanup(); }
+});

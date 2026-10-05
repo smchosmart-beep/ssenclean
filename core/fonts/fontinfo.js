@@ -25,13 +25,28 @@ function tableDir(fd, offset) {
   return tables;
 }
 
+const eucKr = (() => { try { return new TextDecoder('euc-kr'); } catch { return null; } })();
+function utf16be(buf) {
+  const sw = Buffer.from(buf);
+  if (sw.length % 2) return null;
+  sw.swap16();
+  return sw.toString('utf16le');
+}
+// 이름표 글자 풀기. 옛날 한글 폰트는 완성형(Windows 인코딩 5, 맥 인코딩 3)으로만 적혀 있는 경우가 있다.
 function decodeName(platformId, encodingId, buf) {
-  if (platformId === 3 || platformId === 0) {
-    const sw = Buffer.from(buf);
-    sw.swap16 && sw.length % 2 === 0 && sw.swap16();
-    return sw.toString('utf16le');
+  if (platformId === 0) return utf16be(buf);
+  if (platformId === 3) {
+    if (encodingId === 5 && eucKr) {
+      // 16비트 칸에 1바이트 글자는 0x00XX로 들어 있다 → 앞의 0을 빼고 완성형으로 읽는다
+      const bytes = [];
+      for (let i = 0; i + 1 < buf.length; i += 2) { if (buf[i]) bytes.push(buf[i]); bytes.push(buf[i + 1]); }
+      return eucKr.decode(Buffer.from(bytes));
+    }
+    if (encodingId === 0 || encodingId === 1 || encodingId === 10) return utf16be(buf);
+    return null;
   }
   if (platformId === 1 && encodingId === 0) return buf.toString('latin1');
+  if (platformId === 1 && encodingId === 3 && eucKr) return eucKr.decode(buf);
   return null;
 }
 
@@ -52,7 +67,7 @@ function readNames(fd, t) {
     if (s + len > b.length) continue;
     const text = decodeName(pid, eid, b.subarray(s, s + len));
     if (!text) continue;
-    const lk = pid === 3 ? (lang === 0x0412 ? 'ko' : lang === 0x0409 ? 'en' : 'x' + lang.toString(16)) : (pid === 1 ? 'mac' : 'u');
+    const lk = pid === 3 ? (lang === 0x0412 ? 'ko' : lang === 0x0409 ? 'en' : 'x' + lang.toString(16)) : (pid === 1 ? (lang === 23 ? 'ko' : 'mac') : 'u');
     out[key] = out[key] || {};
     if (!out[key][lk]) out[key][lk] = text.replace(/\0/g, '').trim();
   }
@@ -112,4 +127,4 @@ function readFontInfo(file) {
   } catch { return null; } finally { if (fd !== undefined) try { fs.closeSync(fd); } catch { /* ignore */ } }
 }
 
-module.exports = { readFontInfo };
+module.exports = { readFontInfo, decodeName };

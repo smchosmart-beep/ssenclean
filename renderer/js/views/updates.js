@@ -32,7 +32,7 @@ export default async function updatesView(ctx) {
     if (ev.id !== 'chrome') return;
     if (ev.final) {
       chromeLive = null;
-      if (ev.phase === 'done') toast('크롬 업데이트를 마쳤어요. 크롬을 다시 켜면 적용돼요');
+      if (ev.phase === 'done') toast('새 버전을 받아 두었어요. PC를 다시 켜면 적용돼요');
       else if (ev.phase === 'latest') toast('크롬이 이미 최신이에요');
       else if (ev.phase === 'opened') toast("크롬 정보 화면을 열었어요. 업데이트가 끝나면 [다시 시작]을 눌러 주세요");
       else if (ev.phase === 'guide') toast('크롬 오른쪽 위 ⋮ → 설정 → Chrome 정보에서 업데이트하세요');
@@ -52,9 +52,9 @@ export default async function updatesView(ctx) {
       desc = `${PHASE_TEXT[live.phase] || '업데이트하고 있어요'}${live.percent != null ? ` ${live.percent}%` : ''}`;
       right = btn('refresh', '진행 중', null, { disabled: true, testid: 'upd-chrome' });
     } else if (u.state === 'restart') {
-      level = 'warn'; tag = '다시 켜야 적용';
-      desc = '업데이트를 받아 두었어요. 크롬을 다시 켜면 적용돼요. 열린 탭은 다시 열려요.';
-      right = btn('refresh', '크롬 다시 켜기', async () => { const r = await api('updates:run', 'chrome-restart'); if (r.guide) toast(r.guide); setTimeout(run, 2500); }, { testid: 'upd-chrome' });
+      level = 'warn'; tag = 'PC를 다시 켜면 적용돼요';
+      desc = '새 버전을 받아 두었어요. PC를 다시 켜면 크롬이 새 버전으로 바뀌어요. 지금 바로 바꾸려면 크롬 설정 → Chrome 정보에서 [다시 시작]을 누르세요.';
+      right = null; // 반복 클릭을 막기 위해 버튼 없음
     } else if (u.state === 'outdated') {
       level = 'warn'; tag = '업데이트 있음';
       desc = [u.version ? `현재 ${u.version}` : null, u.latest ? `새 버전 ${u.latest}` : null].filter(Boolean).join(' · ');

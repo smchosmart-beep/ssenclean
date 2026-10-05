@@ -319,9 +319,10 @@ function recycleBinQuery(root) {
   } catch { return null; }
 }
 
+// root가 null이면 모든 드라이브 휴지통(Windows 휴지통의 [휴지통 비우기]와 같음)
 function recycleBinEmpty(root) {
   try {
-    const hr = load().SHEmptyRecycleBinW(0, root, 0x1 | 0x2 | 0x4); // 확인창·진행창·소리 없음
+    const hr = load().SHEmptyRecycleBinW(0, root || null, 0x1 | 0x2 | 0x4); // 확인창·진행창·소리 없음
     return hr === 0 || hr === -2147418113 /* 비어 있을 때 E_UNEXPECTED */;
   } catch { return false; }
 }

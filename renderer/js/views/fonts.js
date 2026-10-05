@@ -15,7 +15,7 @@ export default async function fontsView(ctx) {
     box.replaceChildren(h('section', { class: 'panel pad' }, h('div', { class: 'muted' }, '설치된 폰트를 살펴보고 있어요…')));
     data = await api('fonts:list');
     selected.clear();
-    data.items.filter((i) => i.class === 'caution' && i.removable).forEach((i) => selected.add(i.id));
+    data.items.filter((i) => i.defaultOn && i.removable).forEach((i) => selected.add(i.id));
     ctx.setDot('fonts', data.summary.cautionRemovable ? 'warn' : 'ok');
     render();
   }
@@ -37,6 +37,7 @@ export default async function fontsView(ctx) {
       h('div', { class: 'tx' },
         h('strong', {}, item.name),
         h('span', {}, [item.manufacturer || '제작사 정보 없음', item.reason].join(' · ')),
+        item.basis ? h('span', { 'data-testid': 'font-basis', style: { fontSize: '12px', opacity: '.7' } }, `근거: ${item.basis}`) : null,
         ),
       sample(item),
       h('span', { class: 'tag' }, CLASS_TAG[item.class]));
@@ -116,14 +117,14 @@ export default async function fontsView(ctx) {
     });
     const tabs = h('div', { class: 'tabs' },
       [['caution', 'warn', `사용 주의 ${s.caution}`], ['unknown', 'info', `확인 필요 ${s.unknown}`], ['safe', 'checkCircle', `안심 ${s.safe}`], ['school', 'download', '학교안심 글꼴']]
-        .map(([k, ic, l]) => btn(ic, l, () => { tab = k; selected.clear(); if (k === 'caution') data.items.filter((i) => i.class === 'caution' && i.removable).forEach((i) => selected.add(i.id)); render(); }, { variant: tab === k ? 'on' : '', testid: `font-tab-${k}` })));
+        .map(([k, ic, l]) => btn(ic, l, () => { tab = k; selected.clear(); if (k === 'caution') data.items.filter((i) => i.defaultOn && i.removable).forEach((i) => selected.add(i.id)); render(); }, { variant: tab === k ? 'on' : '', testid: `font-tab-${k}` })));
     let body;
     if (tab === 'school') body = schoolTab();
     else {
       const list = data.items.filter((i) => i.class === tab);
       body = list.length ? h('div', { class: 'items', 'data-testid': 'font-list' }, list.map(itemRow)) : emptyState(tab === 'caution' ? '사용 주의 폰트가 없어요' : '해당하는 폰트가 없어요');
       if ((tab === 'caution' || tab === 'unknown') && list.some((i) => i.removable)) footerEl = h('div', { class: 'footer-bar sticky', 'data-testid': 'fonts-footer' });
-      if (tab === 'unknown' && list.length) body = h('div', {}, h('div', { style: { padding: '14px 20px 0' } }, tip('정보가 부족해 판단할 수 없는 폰트예요. 직접 내려받은 기억이 없다면 정리해도 괜찮아요.')), body);
+      if (tab === 'unknown' && list.length) body = h('div', {}, h('div', { style: { padding: '14px 20px 0' } }, tip('정보가 부족해 판단할 수 없는 폰트예요. 학교 문서에는 학교안심 글꼴을 쓰세요. 다른 프로그램이 함께 설치했을 수 있으니 모르면 그대로 두세요.')), body);
     }
     const undoBox = data.undo.length ? h('section', { class: 'panel pad', style: { display: 'flex', alignItems: 'center', gap: '16px' } },
       h('div', { style: { flex: '1' } }, h('div', { class: 'section-title', style: { marginBottom: '0' } }, '최근 정리 기록'),

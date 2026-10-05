@@ -91,6 +91,11 @@ test('폰트: 사용 주의 정리 → 되돌리기, 미리보기 폰트 로드'
   await shot('03-fonts');
   await expect(win.getByTestId('fonts-clean-top')).toBeInViewport(); // 맨 위에도 실행 버튼
   await expect(win.getByTestId('fonts-clean')).toBeInViewport(); // 아래 막대는 화면 아래 고정
+  await expect(win.getByTestId('font-basis').first()).toContainText('근거:');
+  await expect(win.getByTestId('font-check')).toHaveCount(3);
+  expect(await win.getByTestId('font-check').evaluateAll((els) => els.filter((e) => (e.querySelector('input') || e).checked).length)).toBe(2); // PC 전체 폰트는 기본 체크 해제
+  await expect(win.getByTestId('fonts-select-all')).not.toBeChecked();
+  await win.getByTestId('fonts-select-all').click();
   await expect(win.getByTestId('fonts-select-all')).toBeChecked();
   await win.getByTestId('fonts-clean').click();
   await win.getByTestId('confirm-ok').click(); // 열린 프로그램 없음 → 바로 정리 확인
@@ -122,20 +127,23 @@ test('PC암호: 만들기 → D-day', async () => {
   await expect(win.getByTestId('nav-password').locator('.dot')).toHaveClass(/ok/);
 });
 
-test('업데이트: 크롬을 쎈Clean 안에서 업데이트 → 다시 켜기, 한글 업데이트 프로그램', async () => {
+test('업데이트: 크롬을 쎈Clean 안에서 업데이트 → 재부팅 안내, 한글 업데이트 프로그램', async () => {
   await win.getByTestId('nav-updates').click();
   const row = win.getByTestId('upd-row-chrome');
   await expect(row).toContainText('업데이트 있음', { timeout: 20000 });
   await expect(row).toContainText('새 버전 140.0.7339.128');
   await shot('05-updates');
   await win.getByTestId('upd-chrome').click();
-  await expect(row).toContainText('다시 켜야 적용', { timeout: 15000 });
+  await expect(row).toContainText('PC를 다시 켜면 적용돼요', { timeout: 15000 });
+  await expect(win.getByTestId('upd-chrome')).toHaveCount(0); // 다시 켜기 버튼 없음(반복 방지)
   await shot('05b-updates-restart');
-  await win.getByTestId('upd-chrome').click();
-  await expect(row).toContainText('최신', { timeout: 15000 });
   const log = await mockLog();
   expect(log.some((l) => l.op === 'chromeInstall')).toBeTruthy();
-  expect(log.some((l) => l.op === 'launch' && (l.args || []).includes('--restore-last-session'))).toBeTruthy();
+  expect(log.some((l) => l.op === 'close' && l.image === 'chrome.exe')).toBeFalsy(); // 크롬을 끄지 않음
+  // 재부팅 뒤(대기 파일이 적용되면) 최신
+  fs.rmSync(path.join(root, 'Program Files', 'Google', 'Chrome', 'Application', 'new_chrome.exe'), { force: true });
+  await win.getByTestId('upd-recheck').click();
+  await expect(row).toContainText('최신', { timeout: 15000 });
   await expect(win.getByTestId('upd-row-hangul')).toContainText('12.0.0.3650');
   await expect(win.getByTestId('upd-hangul')).toHaveText('업데이트 열기');
   await win.getByTestId('upd-hangul').click();

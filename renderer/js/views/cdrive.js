@@ -89,7 +89,7 @@ export default async function cdriveView(ctx) {
     let bigFiles;
     if (scanning) {
       bigFiles = card('card-files', 'search', '큰 파일 정리', h('span', { class: 'cd-scan' }, h('span', { class: 'spinner' }), '찾는 중…'),
-        `폴더 ${prog.dirs.toLocaleString()}개 확인 · 찾은 파일 ${prog.found}개`,
+        prog.phase === 'dup' ? `찾은 파일 ${prog.found}개 · 같은 파일인지 내용을 비교하고 있어요` : `폴더 ${prog.dirs.toLocaleString()}개 확인 · 찾은 파일 ${prog.found}개`,
         [btn('stop', '멈추기', () => api('cdrive:stop'), { testid: 'cdrive-stop' })]);
     } else if (scanned) {
       bigFiles = card('card-files', 'video', '큰 파일 정리', results.length ? fmtBytes(sumOf(results)) : '없어요',
@@ -101,7 +101,7 @@ export default async function cdriveView(ctx) {
         [btn('search', '큰 파일 찾기', startScan, { variant: 'primary', testid: 'cdrive-scan' })]);
     }
     const trash = card('recycle-panel', 'trash', '휴지통 비우기', r ? (hasTrash ? fmtBytes(r.size) : '비어 있어요') : '확인 불가',
-      hasTrash ? `${r.count}개 · 휴지통에 있어도 C드라이브 공간을 그대로 차지해요` : '휴지통에 있는 파일도 C드라이브 공간을 차지해요',
+      hasTrash ? `${r.count}개 · 그중 C드라이브 ${fmtBytes(r.cSize)} · 휴지통에 있어도 공간을 그대로 차지해요` : '휴지통에 있는 파일도 공간을 차지해요',
       [btn('broom', '휴지통 비우기', emptyRecycle, { variant: hasTrash ? 'primary' : '', disabled: !hasTrash, testid: 'empty-recycle' }),
         btn('open', '열기', () => api('cdrive:openRecycle'), { title: '휴지통 열기' })]);
     const prog2 = card('card-programs', 'trash', '안 쓰는 프로그램 지우기', null,
@@ -111,10 +111,15 @@ export default async function cdriveView(ctx) {
   }
 
   async function emptyRecycle() {
-    const ok = await confirmDialog({ title: '휴지통을 비울까요?', body: `휴지통에 있는 ${st.recycle.count}개 파일(${fmtBytes(st.recycle.size)})을 완전히 지워요.`, warn: '비우면 다시 꺼낼 수 없어요', okLabel: '비우기', okIcon: 'broom', danger: true });
+    const parts = st.recycle.drives.map((d) => `${d.letter}드라이브 ${fmtBytes(d.size)}${d.system ? ' (C드라이브 공간이 늘어나요)' : ''}`);
+    const ok = await confirmDialog({
+      title: '휴지통을 비울까요?',
+      body: h('div', {}, h('div', {}, `모든 드라이브 휴지통의 ${st.recycle.count}개 파일(${fmtBytes(st.recycle.size)})을 완전히 지워요.`), h('div', { style: { marginTop: '6px' } }, parts.join(' · '))),
+      warn: '비우면 다시 꺼낼 수 없어요', okLabel: '비우기', okIcon: 'broom', danger: true,
+    });
     if (!ok) return;
     const r = await api('cdrive:emptyRecycle');
-    toast(r.ok ? '휴지통을 비웠어요' : '휴지통을 비우지 못했어요');
+    toast(r.ok ? '휴지통을 비웠어요' : r.partial ? `일부를 비우지 못했어요(${r.left}개 남음). 파일이 사용 중일 수 있어요` : '휴지통을 비우지 못했어요');
     await refresh();
   }
 

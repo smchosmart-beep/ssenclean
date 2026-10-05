@@ -98,6 +98,10 @@ test('폰트: 분류·정리·되돌리기·학교안심 설치', async (t) => {
   assert.strictEqual(by['Cafe24 PRO Slim'].class, 'safe');
   const sysSandoll = l.items.find((i) => i.scope === 'system' && i.class === 'caution');
   assert.ok(sysSandoll && sysSandoll.removable && sysSandoll.needsAdmin, '이 PC 전체 폰트도 확인 창을 거쳐 정리 가능');
+  assert.strictEqual(sysSandoll.defaultOn, false, 'PC 전체 폰트는 기본 체크 해제');
+  assert.strictEqual(by['산돌테스트고딕'].defaultOn, true);
+  assert.ok(by['산돌테스트고딕'].basis, '분류 근거 표시');
+  assert.ok(l.items.filter((i) => i.class === 'safe').every((i) => !i.removable), '안심 폰트는 정리 대상 아님');
   const userCaution = l.items.filter((i) => i.class === 'caution' && i.scope === 'user');
   assert.strictEqual(userCaution.length, 2);
   assert.strictEqual(l.summary.cautionRemovable, 3);
@@ -224,7 +228,7 @@ test('업데이트: 크롬은 이 PC의 구글 업데이트 답을 따른다', a
   assert.strictEqual(c.latest, '140.0.7339.128');
 });
 
-test('업데이트: 크롬 업데이트 진행률 → 다시 켜기', async (t) => {
+test('업데이트: 크롬 업데이트 진행률 → 재부팅 안내', async (t) => {
   const env = freshEnv();
   t.after(env.cleanup);
   const events = [];
@@ -238,13 +242,13 @@ test('업데이트: 크롬 업데이트 진행률 → 다시 켜기', async (t) 
   assert.ok(events.some((e) => e.phase === 'downloading' && e.percent === 100));
   assert.strictEqual(events[events.length - 1].phase, 'done');
   assert.strictEqual((await svc.check()).find((u) => u.id === 'chrome').state, 'restart');
-  // 다시 켜기: 크롬을 정상 종료 요청 후 탭 복원 옵션으로 실행
+  // 다시 눌러도 크롬을 끄거나 켜지 않고 재부팅 안내만
   const rr = await svc.run('chrome');
-  assert.ok(rr.ok);
+  assert.ok(rr.ok && /PC를 다시 켜면/.test(rr.guide));
   const log = env.platform._log();
-  assert.ok(log.some((l) => l.op === 'close' && l.image === 'chrome.exe'));
-  assert.ok(log.some((l) => l.op === 'launch' && /chrome\.exe$/.test(l.file) && l.args.includes('--restore-last-session')));
-  assert.strictEqual((await svc.check()).find((u) => u.id === 'chrome').state, 'latest');
+  assert.ok(!log.some((l) => l.op === 'close' && l.image === 'chrome.exe'));
+  assert.ok(!log.some((l) => l.op === 'launch' && /chrome\.exe$/.test(l.file)));
+  assert.strictEqual((await svc.check()).find((u) => u.id === 'chrome').state, 'restart');
 });
 
 test('업데이트: 구글 업데이트를 못 쓰면 주소창 대체, 서버 번호는 2판 이상 뒤처질 때만', async (t) => {

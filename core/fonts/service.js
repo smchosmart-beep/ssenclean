@@ -128,7 +128,9 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
   }
 
   function list() {
-    const cache = store.read('font-cache.json', {});
+    // 1.5: 이름표 해석(완성형 한글)이 바뀌어 예전 캐시는 버린다
+    let cache = store.read('font-cache.json', {});
+    if (cache.__v !== 2) cache = { __v: 2 };
     const items = [];
     const seen = new Set();
     for (const r of registered()) {
@@ -147,8 +149,11 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
         fileName: path.basename(r.file),
         regName: r.regName,
         scope: r.scope,
-        // 이 PC 전체 폰트는 '사용 주의'(상용 제작사)만 정리 대상. 정보가 없는 폰트는 프린터·드라이버용일 수 있어 내 계정 것만.
-        removable: r.scope === 'user' || c.class === 'caution',
+        // 안심(특히 Windows·오피스·한컴 글꼴)은 정리하지 않는다. 이 PC 전체 폰트는 '사용 주의'만, 정보가 없는 폰트는 내 계정 것만.
+        removable: c.class !== 'safe' && !c.bundled && (r.scope === 'user' || c.class === 'caution'),
+        // 처음부터 체크: 내 계정에 설치한 사용 주의 폰트만(이 PC 전체 폰트는 다른 프로그램이 함께 설치했을 수 있어 체크 해제)
+        defaultOn: c.class === 'caution' && r.scope === 'user',
+        basis: c.basis || '',
         needsAdmin: r.scope === 'system',
         name: info.familyKo || info.family || info.familyEn || path.basename(r.file),
         nameEn: info.familyEn,
@@ -190,7 +195,7 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
     const listRows = [];
     for (const id of ids || []) {
       const item = lastList.get(id);
-      if (!item || !item.removable) { results.push({ id, ok: false, reason: item ? 'not-removable' : 'unknown' }); continue; }
+      if (!item || !item.removable || item.class === 'safe') { results.push({ id, ok: false, reason: item ? 'not-removable' : 'unknown' }); continue; }
       // 보관함에 복사하고 확인된 뒤에만 정리한다
       const backup = archiveCopy(item.file, backupDir);
       if (!backup) { results.push({ id, ok: false, reason: 'backup' }); continue; }

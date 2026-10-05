@@ -192,33 +192,16 @@ function createUpdateService({ platform, emit = () => {} }) {
     });
   }
 
-  async function restartChrome(exe) {
-    const running = (await platform.processes()).includes('chrome.exe');
-    if (running) {
-      await platform.requestClose('chrome.exe');
-      for (let i = 0; i < 20; i++) {
-        await new Promise((r) => setTimeout(r, 250));
-        if (!(await platform.processes()).includes('chrome.exe')) break;
-      }
-    }
-    platform.launch(exe, running ? ['--restore-last-session'] : []);
-    return { ok: true, guide: '크롬을 다시 켰어요.' };
-  }
-
   async function run(id) {
     switch (id) {
       case 'chrome': {
         const exe = chromeExe();
         if (!exe) return { ok: false, guide: '크롬 오른쪽 위 ⋮ → 설정 → Chrome 정보에서 업데이트하세요.' };
         if (chromeJob) return { ok: true, inline: true };
-        if (chromeNeedsRestart(exe)) return restartChrome(exe);
+        // 새 버전을 받아 둔 상태: 쎈Clean이 크롬을 직접 다시 켜지 않는다(완전히 꺼지지 않으면 적용되지 않음). 재부팅 안내만.
+        if (chromeNeedsRestart(exe)) return { ok: true, guide: 'PC를 다시 켜면 크롬이 새 버전으로 바뀌어요.' };
         startChromeUpdate(exe);
         return { ok: true, inline: true };
-      }
-      case 'chrome-restart': {
-        const exe = chromeExe();
-        if (!exe) return { ok: false };
-        return restartChrome(exe);
       }
       case 'windows':
         winCache = null;

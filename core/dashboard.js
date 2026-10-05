@@ -43,7 +43,7 @@ function createDashboard(s) {
       const list = await s.updates.check();
       const restart = list.find((u) => u.state === 'restart');
       if (restart && list.filter((u) => u.state === 'outdated').length === 0) {
-        return card('updates', 'warn', '크롬을 다시 켜면 업데이트가 적용돼요', '업데이트를 받아 두었어요.', { kind: 'navigate', target: 'updates', label: '다시 켜기', icon: 'refresh' });
+        return card('updates', 'warn', 'PC를 다시 켜면 크롬 업데이트가 적용돼요', '새 버전을 받아 두었어요.', { kind: 'navigate', target: 'updates', label: '자세히', icon: 'search' });
       }
       const out = list.filter((u) => u.state === 'outdated' || u.state === 'restart');
       const go = { kind: 'navigate', target: 'updates', label: '업데이트', icon: 'up' };

@@ -191,12 +191,23 @@ function createMockPlatform({ root, seed = true } = {}) {
       log({ op: 'elevated', ops: ops.map((o) => o.op) });
       return { ok: true, results };
     },
+    // 드라이브마다 휴지통: C는 _Trash, 다른 드라이브는 <드라이브>\$Recycle.Bin
     recycleBin: {
-      query: () => {
-        let count = 0; try { count = fs.readdirSync(paths.trash).length; } catch { /* empty */ }
-        return { size: dirBytes(paths.trash), count };
+      query: (r) => {
+        const dir = !r || path.resolve(r) === path.resolve(paths.systemDrive) ? paths.trash : path.join(r, '$Recycle.Bin');
+        let count = 0; try { count = fs.readdirSync(dir).length; } catch { /* empty */ }
+        return { size: dirBytes(dir), count };
       },
-      empty: () => { fs.rmSync(paths.trash, { recursive: true, force: true }); log({ op: 'emptyTrash' }); return true; },
+      empty: (r) => {
+        const dirs = r ? [path.resolve(r) === path.resolve(paths.systemDrive) ? paths.trash : path.join(r, '$Recycle.Bin')]
+          : [paths.trash, ...disks().filter((d) => d.letter !== 'C').map((d) => path.join(d.root, '$Recycle.Bin'))];
+        for (const d of dirs) {
+          let ents = []; try { ents = fs.readdirSync(d); } catch { continue; }
+          for (const e of ents) { const p = path.join(d, e); if ((state.lockedFiles || []).includes(p)) continue; fs.rmSync(p, { recursive: true, force: true }); }
+        }
+        log({ op: 'emptyTrash', root: r || 'all' });
+        return true;
+      },
     },
     fileAttributes: (p) => {
       const base = path.basename(p);

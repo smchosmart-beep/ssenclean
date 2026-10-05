@@ -33,6 +33,30 @@ function dupKey(name, size) {
   return `${base}${ext}|${size}`;
 }
 
+// 파일 내용 지문: 256MB 이하는 전체, 그보다 크면 앞·중간·끝 1MB씩(+크기). 큰 파일 전체 비교는 너무 오래 걸린다
+async function contentHash(file, size) {
+  const crypto = require('crypto');
+  const h = crypto.createHash('sha1');
+  h.update(String(size));
+  try {
+    if (size <= 256 * MB) {
+      await new Promise((resolve, reject) => {
+        fs.createReadStream(file, { highWaterMark: 4 * MB }).on('data', (d) => h.update(d)).on('end', resolve).on('error', reject);
+      });
+    } else {
+      const fd = await fs.promises.open(file, 'r');
+      try {
+        const buf = Buffer.alloc(MB);
+        for (const pos of [0, Math.floor(size / 2), size - MB]) {
+          const { bytesRead } = await fd.read(buf, 0, MB, pos);
+          h.update(buf.subarray(0, bytesRead));
+        }
+      } finally { await fd.close(); }
+    }
+    return h.digest('hex');
+  } catch { return null; }
+}
+
 function uniquePath(p) {
   if (!fs.existsSync(p)) return p;
   const ext = path.extname(p), base = p.slice(0, p.length - ext.length);
@@ -82,8 +106,7 @@ function createCdriveService({ platform, store, emit = () => {} }) {
     const list = disks();
     const sys = list.find(isSys) || null;
     const others = list.filter((d) => !isSys(d)).map((d) => ({ ...d, name: `${d.letter}드라이브` }));
-    let recycle = null;
-    try { recycle = platform.recycleBin.query(sysRoot); } catch { recycle = null; }
+    const recycle = recycleStatus(list);
     const hist = history();
     const prefs = store.read('cdrive-prefs.json', {});
     const fixed = others.filter((d) => !d.removable).sort((a, b) => b.free - a.free);
@@ -163,9 +186,24 @@ function createCdriveService({ platform, store, emit = () => {} }) {
       emit('cdrive:event', { type: 'start' });
       await walk(sysRoot, 0);
       found.sort((a, b) => b.size - a.size);
+      // 같은 파일: 이름·크기가 같은 후보끼리 내용까지 비교해서 같을 때만 표시
       const groups = new Map();
-      for (const f of found) { const k = dupKey(f.name, f.size); groups.set(k, (groups.get(k) || 0) + 1); }
-      for (const f of found) { const n = groups.get(dupKey(f.name, f.size)); if (n > 1) f.dup = n; }
+      for (const f of found) { const k = dupKey(f.name, f.size); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
+      const cands = [...groups.values()].filter((g) => g.length > 1);
+      if (cands.length && !stopFlag) {
+        emit('cdrive:event', { type: 'progress', ...prog, phase: 'dup' });
+        for (const g of cands) {
+          const byHash = new Map();
+          for (const f of g) {
+            if (stopFlag) break;
+            const h = await contentHash(f.path, f.size);
+            if (!h) continue;
+            if (!byHash.has(h)) byHash.set(h, []);
+            byHash.get(h).push(f);
+          }
+          for (const same of byHash.values()) if (same.length > 1) same.forEach((f) => { f.dup = same.length; });
+        }
+      }
       results = found;
       const summary = { at: Date.now(), count: found.length, bytes: found.reduce((n, f) => n + f.size, 0), stopped: stopFlag };
       store.write('cdrive-last.json', summary);
@@ -294,10 +332,32 @@ function createCdriveService({ platform, store, emit = () => {} }) {
     return out;
   }
 
+  // 휴지통: Windows처럼 모든 드라이브 휴지통을 합쳐 보여 주고, 비울 때도 모두 비운다.
+  function recycleStatus(list = disks()) {
+    const drives = [];
+    for (const d of list) {
+      let q = null;
+      try { q = platform.recycleBin.query(d.root); } catch { q = null; }
+      if (q) drives.push({ letter: d.letter, size: q.size, count: q.count, system: isSys(d) });
+    }
+    if (!drives.length) {
+      let q = null; try { q = platform.recycleBin.query(sysRoot); } catch { q = null; }
+      if (!q) return null;
+      drives.push({ letter: 'C', size: q.size, count: q.count, system: true });
+    }
+    const size = drives.reduce((n, d) => n + d.size, 0);
+    const count = drives.reduce((n, d) => n + d.count, 0);
+    const c = drives.find((d) => d.system);
+    return { size, count, cSize: c ? c.size : 0, drives: drives.filter((d) => d.count > 0 || d.size > 0) };
+  }
+
   function emptyRecycle() {
+    const before = recycleStatus();
     let ok = false;
-    try { ok = platform.recycleBin.empty(sysRoot); } catch { ok = false; }
-    return { ok };
+    try { ok = platform.recycleBin.empty(null); } catch { ok = false; }
+    const after = recycleStatus();
+    const left = after ? after.count : null;
+    return { ok: ok && left === 0, partial: ok && left > 0, left, freed: before && after ? Math.max(0, before.size - after.size) : null };
   }
 
   function history() {
