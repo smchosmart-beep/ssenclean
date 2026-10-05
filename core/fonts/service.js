@@ -157,6 +157,7 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
         needsAdmin: r.scope === 'system',
         name: info.familyKo || info.family || info.familyEn || path.basename(r.file),
         nameEn: info.familyEn,
+        fullName: info.fullName || '',
         manufacturer: info.manufacturer || '',
         class: c.class,
         reason: c.reason,
@@ -180,7 +181,10 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
     };
   }
 
-  function fileFor(id) { const i = lastList.get(id); return i ? i.file : null; }
+  function fileFor(id) {
+    if (/^school-\d+$/.test(id)) { const b = bundledSchoolFonts().find((x) => x.id === id); return b ? b.file : null; }
+    const i = lastList.get(id); return i ? i.file : null;
+  }
 
   async function runningApps() {
     const procs = await platform.processes();
@@ -288,35 +292,64 @@ function createFontService({ platform, store, dataDir, assetsDir }) {
   }
 
   // ── 학교안심 글꼴 ──
+  // 설치파일에는 자주 쓰는 몇 종만 넣고(assets/fonts/Hakgyoansim*), 나머지는 KERIS 누리집 링크로 안내한다.
+  const WEIGHT = { L: '얇게', R: '보통', M: '중간', B: '굵게' };
+  const normKey = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  let schoolCache = null;
   function bundledSchoolFonts() {
+    if (schoolCache) return schoolCache;
     const dir = path.join(assetsDir, 'fonts');
     let files = [];
-    try { files = fs.readdirSync(dir).filter((f) => /^hakgyoansim/i.test(f) && FONT_EXT.has(path.extname(f).toLowerCase())); } catch { /* none */ }
-    return files.map((f) => {
+    try { files = fs.readdirSync(dir).filter((f) => /^hakgyoansim/i.test(f) && FONT_EXT.has(path.extname(f).toLowerCase())).sort(); } catch { /* none */ }
+    schoolCache = files.map((f, i) => {
       const file = path.join(dir, f);
       const info = readFontInfo(file) || {};
-      return { file, fileName: f, name: info.familyKo || info.family || f, nameEn: info.familyEn || '' };
+      const full = info.fullName || info.familyKo || path.basename(f, path.extname(f));
+      const m = String(full).match(/\s([LRMB])$/i) || path.basename(f, path.extname(f)).match(/([LRMB])$/);
+      const w = m ? m[1].toUpperCase() : '';
+      const family = String(info.familyKo || full).replace(/\s+[LRMB]$/i, '').replace(/\s+TTF$/i, '').trim();
+      return { id: `school-${i}`, file, fileName: f, fullName: full, family, weight: w, weightLabel: w ? `${w} ${WEIGHT[w] || ''}`.trim() : '', nameEn: info.familyEn || '' };
     });
+    return schoolCache;
   }
 
+  // 설치 여부는 굵기(파일)마다 따로 본다. 파일 이름이나 전체 이름(예: '학교안심 바른돋움 B')이 같으면 설치된 것.
   function schoolStatus(items) {
     const res = new RegExp(db.schoolFonts.patterns.join('|'), 'i');
-    const installedNames = new Set(items.filter((i) => res.test(i.name) || res.test(i.nameEn || '')).map((i) => i.name));
-    const bundled = bundledSchoolFonts().map((b) => ({ name: b.name, installed: installedNames.has(b.name) }));
-    return { bundled, installedCount: installedNames.size, allInstalled: bundled.length > 0 && bundled.every((b) => b.installed), officialUrl: db.schoolFonts.officialUrl };
+    const school = items.filter((i) => res.test(i.name) || res.test(i.nameEn || ''));
+    const keys = new Set(school.flatMap((i) => [normKey(i.fileName), normKey(i.fullName)]).filter(Boolean));
+    const families = [];
+    for (const b of bundledSchoolFonts()) {
+      let fam = families.find((x) => x.name === b.family);
+      if (!fam) { fam = { name: b.family, sampleId: b.id, weights: [] }; families.push(fam); }
+      fam.weights.push({ id: b.id, fileName: b.fileName, weight: b.weight, label: b.weightLabel, installed: keys.has(normKey(b.fileName)) || keys.has(normKey(b.fullName)) });
+    }
+    for (const f of families) f.installed = f.weights.every((w) => w.installed);
+    families.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    const fileCount = families.reduce((n, f) => n + f.weights.length, 0);
+    return {
+      families, fileCount,
+      installedCount: new Set(school.map((i) => i.fileName.toLowerCase())).size, // KERIS에서 따로 받은 것까지
+      allInstalled: families.length > 0 && families.every((f) => f.installed),
+      officialUrl: db.schoolFonts.officialUrl,
+    };
   }
 
-  function installSchool() {
+  // ids: 설치할 school-N 목록(없으면 전부)
+  function installSchool(ids) {
+    const want = Array.isArray(ids) && ids.length ? new Set(ids) : null;
     const results = [];
     fs.mkdirSync(P.userFonts, { recursive: true });
     for (const b of bundledSchoolFonts()) {
+      if (want && !want.has(b.id)) continue;
       const dest = path.join(P.userFonts, b.fileName);
       try {
         if (!fs.existsSync(dest)) fs.copyFileSync(b.file, dest);
-        platform.reg.write(USER_FONTS_KEY, `${b.nameEn || b.name} (TrueType)`, platform.REG.SZ, dest);
+        // 값 이름은 굵기마다 달라야 한다(같은 이름이면 B가 R을 덮어씀)
+        platform.reg.write(USER_FONTS_KEY, `${b.fullName} (TrueType)`, platform.REG.SZ, dest);
         platform.fonts.add(dest);
-        results.push({ name: b.name, ok: true });
-      } catch { results.push({ name: b.name, ok: false }); }
+        results.push({ name: b.fullName, ok: true });
+      } catch { results.push({ name: b.fullName, ok: false }); }
     }
     platform.fonts.broadcast();
     return results;

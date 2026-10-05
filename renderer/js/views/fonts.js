@@ -87,20 +87,44 @@ export default async function fontsView(ctx) {
 
   function schoolTab() {
     const s = data.school;
-    if (!s.bundled.length) return h('div', { class: 'panel pad' }, tip('학교안심 글꼴 파일이 설치파일에 들어 있지 않아요. 공식 배포처에서 내려받아 설치해 주세요.'));
+    const moreBtn = s.officialUrl ? btn('open', '더 많은 학교안심 글꼴 받기', () => api('app:openExternal', s.officialUrl), { testid: 'school-more' }) : null;
+    const moreTip = h('div', { class: 'tip', style: { marginTop: '16px' } }, icon('bulb'),
+      h('div', { style: { flex: '1' } }, `쎈Clean에는 자주 쓰는 학교안심 글꼴 ${s.families.length}종만 들어 있어요. 다른 글꼴은 KERIS 누리집에서 내려받아 설치하세요.${s.installedCount ? ` (이 PC에 설치된 학교안심 글꼴 파일 ${s.installedCount}개)` : ''}`),
+      moreBtn);
+    if (!s.families.length) return h('div', { class: 'panel pad' }, tip('학교안심 글꼴 파일이 설치파일에 들어 있지 않아요. 공식 배포처에서 내려받아 설치해 주세요.'), moreTip);
+    const install = async (ids, label) => {
+      const r = await api('fonts:installSchool', ids);
+      await load();
+      tab = 'school'; render();
+      toast(r.every((x) => x.ok) ? `${label}을(를) 설치했어요` : '일부를 설치하지 못했어요');
+    };
+    const sampleOf = (id) => {
+      const fam = `sf-${id}`;
+      if (!loaded.has(id)) {
+        loaded.add(id);
+        try { const ff = new FontFace(fam, `url(senfont://${id}/)`); ff.load().then((f) => document.fonts.add(f)).catch(() => {}); } catch { /* ignore */ }
+      }
+      return fam;
+    };
+    const rows = s.families.map((f) => {
+      const missing = f.weights.filter((w) => !w.installed);
+      return h('div', { class: `item tone-${f.installed ? 'ok' : 'info'}`, 'data-testid': 'school-family' },
+        h('div', { class: 'ic' }, icon(f.installed ? 'checkCircle' : 'download')),
+        h('div', { class: 'tx' },
+          h('strong', {}, f.name),
+          h('span', {}, f.weights.map((w) => `${w.label || '보통'} ${w.installed ? '✓' : ''}`.trim()).join(' · '))),
+        h('div', { class: 'font-sample', style: { fontFamily: `"${sampleOf(f.sampleId)}", var(--ui)` } }, '가나다 우리 반 ABC 123'),
+        f.installed ? h('span', { class: 'tag' }, '설치됨')
+          : btn('download', '설치', () => install(missing.map((w) => w.id), f.name), { testid: 'school-install-one' }));
+    });
     return h('div', { class: 'pad', style: { padding: '20px 24px' } },
-      h('div', { class: 'items' }, s.bundled.map((b) => h('div', { class: `item tone-${b.installed ? 'ok' : 'info'}` },
-        h('div', { class: 'ic' }, icon(b.installed ? 'checkCircle' : 'download')),
-        h('div', { class: 'tx' }, h('strong', {}, b.name), h('span', {}, b.installed ? '설치되어 있어요' : '아직 설치하지 않았어요'))))),
-      h('div', { class: 'btn-row', style: { marginTop: '16px' } },
+      h('div', { class: 'btn-row', style: { marginBottom: '14px' } },
+        h('span', { style: { flex: '1' } }, `학교안심 글꼴 ${s.families.length}종 (파일 ${s.fileCount}개)`),
         s.allInstalled ? h('span', { class: 'muted' }, '학교안심 글꼴이 모두 설치되어 있어요.')
-          : btn('download', '학교안심 글꼴 설치하기', async () => {
-            const r = await api('fonts:installSchool');
-            await load();
-            tab = 'school'; render();
-            toast(r.every((x) => x.ok) ? '학교안심 글꼴을 설치했어요' : '일부를 설치하지 못했어요');
-          }, { variant: 'primary', testid: 'install-school' })),
-      h('div', { style: { marginTop: '14px' } }, tip('한글·파워포인트는 다시 켜야 글꼴 목록에 보여요.')));
+          : btn('download', '모두 설치', () => install(null, '학교안심 글꼴'), { variant: 'primary', testid: 'install-school' })),
+      h('div', { class: 'items' }, rows),
+      moreTip,
+      h('div', { style: { marginTop: '10px' } }, tip('한글·파워포인트는 다시 켜야 글꼴 목록에 보여요.')));
   }
 
   function render() {

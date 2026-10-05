@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { freshEnv, waitFor } = require('./helpers');
 const { createPrivacyService } = require('../../core/privacy/service');
-const { createFontService } = require('../../core/fonts/service');
+const { createFontService, USER_FONTS_KEY } = require('../../core/fonts/service');
 const { createPasswordService } = require('../../core/password');
 const { createScreensaverService } = require('../../core/screensaver');
 const { createUpdateService, cmpVersion } = require('../../core/updates');
@@ -140,9 +140,25 @@ test('폰트: 분류·정리·되돌리기·학교안심 설치', async (t) => {
   assert.strictEqual(svc.list().summary.cautionRemovable, 3);
 
   assert.strictEqual(l.school.allInstalled, false);
+  // 학교안심 글꼴: 20종 28개, 종류별로 묶고 굵기마다 설치 여부를 따로 본다
+  assert.strictEqual(l.school.families.length, 20);
+  assert.strictEqual(l.school.fileCount, 28);
+  assert.strictEqual(l.school.officialUrl, 'https://copyright.keris.or.kr/wft/fntDwnld?pageIndex=1');
+  const bd = l.school.families.find((f) => f.name === '학교안심 바른돋움');
+  assert.deepStrictEqual(bd.weights.map((w) => w.weight).sort(), ['B', 'R']);
+  assert.ok(l.school.families.some((f) => f.name === '학교안심 출석부'), "' TTF' 꼬리는 뗀다");
+  const bOnly = bd.weights.find((w) => w.weight === 'B');
+  const one = svc.installSchool([bOnly.id]);
+  assert.deepStrictEqual(one.map((x) => x.ok), [true]);
+  const bd2 = svc.list().school.families.find((f) => f.name === '학교안심 바른돋움');
+  assert.deepStrictEqual(bd2.weights.map((w) => [w.weight, w.installed]).sort(), [['B', true], ['R', false]], 'B만 설치하면 R은 아직');
+  assert.strictEqual(bd2.installed, false);
   const inst = svc.installSchool();
-  assert.ok(inst.length >= 1 && inst.every((x) => x.ok));
+  assert.ok(inst.length === 28 && inst.every((x) => x.ok));
+  const names = Object.keys(env.platform.reg.values(USER_FONTS_KEY)).filter((n) => /바른돋움/.test(n));
+  assert.strictEqual(names.length, 2, '굵기마다 레지스트리 값 이름이 따로');
   assert.strictEqual(svc.list().school.allInstalled, true);
+  assert.ok(svc.fileFor(bOnly.id).endsWith('HakgyoansimBareondotumB.ttf'), '미리보기 파일');
 });
 
 test('PC암호: 없음 → 만들기 → D-day, 틀린 암호·정책 위반', async (t) => {

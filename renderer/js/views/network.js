@@ -1,6 +1,6 @@
 import { h, btn, api, hero, pageHead, tip, toast, confirmDialog, modal, statusRow, radio, select, emptyState, fmtDate, icon, pendingCard } from '../ui.js';
 
-const HW = [['pcModel', 'PC 모델'], ['cpu', 'CPU'], ['ram', 'RAM'], ['ssd', 'SSD'], ['monitor', '모니터'], ['printer', '프린터']];
+const HW = [['pcModel', 'PC 모델'], ['cpu', 'CPU'], ['ram', 'RAM'], ['ssd', 'SSD'], ['hdd', 'HDD'], ['monitor', '모니터'], ['printer', '프린터']];
 const FIELDS = [['ip', 'IP 주소', '예: 10.20.3.42'], ['mask', '서브넷 마스크', '255.255.255.0'], ['gateway', '기본 게이트웨이', '예: 10.20.3.1'], ['dns1', '기본 DNS 서버', ''], ['dns2', '보조 DNS 서버', '(없으면 비워 두세요)']];
 const input = (value, opts = {}) => { const el = h('input', { class: 'field', type: 'text', inputmode: 'decimal', autocomplete: 'off', spellcheck: 'false', ...opts }); el.value = value || ''; return el; };
 
@@ -161,6 +161,60 @@ export default async function networkView(ctx) {
 
   // ───────────── 정보부장: 교실 IP 관리 ─────────────
   let query = '';
+  let sort = { key: 'room', dir: 1 };
+  const ipNum = (ip) => (ip ? ip.split('.').reduce((n, x) => n * 256 + Number(x), 0) : '');
+  const cellText = (v, w) => h('div', { class: 'cell', style: { maxWidth: `${w}px` }, title: v || '' }, v || '-');
+  const statusTags = (pc) => {
+    const tags = [];
+    if (pc.duplicate) tags.push(h('span', { class: 'tag tone-danger' }, 'IP 중복'));
+    if (pc.assignedIp) tags.push(h('span', { class: 'tag tone-warn' }, `변경 대기 → ${pc.assignedIp}`));
+    if (pc.dhcp) tags.push(h('span', { class: 'tag tone-info' }, '자동 IP'));
+    return tags.length ? h('div', { class: 'counts', style: { flexWrap: 'nowrap' } }, tags) : h('span', { class: 'muted' }, '-');
+  };
+
+  // 구입 시기: 칸을 누르면 바로 입력(Enter 저장, Esc 취소)
+  function purchaseCell(pc) {
+    const box = h('div', { class: 'cell editable', title: '눌러서 구입 시기 입력 (예: 2023.03)', 'data-testid': 'reg-purchase', tabindex: '0' }, pc.purchase || h('span', { class: 'muted' }, '입력'));
+    const startEdit = () => {
+      const inp = h('input', { class: 'field cell-input', type: 'text', placeholder: '2023.03', 'data-testid': 'reg-purchase-input' });
+      inp.value = pc.purchase || '';
+      let done = false;
+      const finish = async (save) => {
+        if (done) return;
+        if (save && inp.value.trim() !== (pc.purchase || '')) {
+          const r = await api('registry:update', { id: pc.id, purchase: inp.value });
+          if (!r.ok) { toast(r.msg || '구입 시기를 확인해 주세요'); inp.classList.add('bad'); inp.focus(); return; }
+          pc.purchase = r.record.purchase || '';
+        }
+        done = true;
+        box.replaceWith(purchaseCell(pc));
+      };
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); finish(true); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); } });
+      inp.addEventListener('blur', () => finish(true));
+      box.replaceChildren(inp);
+      box.classList.remove('editable');
+      inp.focus(); inp.select();
+    };
+    box.addEventListener('click', () => { if (!box.querySelector('input')) startEdit(); });
+    box.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !box.querySelector('input')) startEdit(); });
+    return box;
+  }
+
+  const COLS = {
+    room: { label: '교실', cell: (pc) => h('div', { class: 'cell', style: { maxWidth: '140px', fontWeight: '700' }, title: pc.room || '' }, pc.room || '(교실 이름 없음)') },
+    pcName: { label: 'PC 이름', cell: (pc) => cellText(pc.pcName, 150) },
+    ip: { label: 'IP', cell: (pc) => cellText(pc.ip, 130), sortVal: (pc) => ipNum(pc.ip) },
+    mac: { label: 'MAC', cell: (pc) => cellText(pc.mac, 160) },
+    cpu: { label: 'CPU', cell: (pc) => cellText(pc.cpu, 220) },
+    ram: { label: 'RAM', cell: (pc) => cellText(pc.ram, 80), sortVal: (pc) => (pc.ram ? parseFloat(pc.ram) * (/TB/i.test(pc.ram) ? 1024 : 1) : '') },
+    ssd: { label: 'SSD', cell: (pc) => cellText(pc.ssd, 150) },
+    hdd: { label: 'HDD', cell: (pc) => cellText(pc.hdd, 120) },
+    monitor: { label: '모니터', cell: (pc) => cellText(pc.monitor, 200) },
+    printer: { label: '프린터', cell: (pc) => cellText(pc.printer, 200) },
+    purchase: { label: '구입 시기', cell: purchaseCell },
+    receivedAt: { label: '받은 날', cell: (pc) => cellText(pc.receivedAt ? fmtDate(pc.receivedAt) : '', 110), sortVal: (pc) => pc.receivedAt || '' },
+    status: { label: '상태', cell: statusTags, sortVal: (pc) => (pc.duplicate ? 0 : pc.assignedIp ? 1 : pc.dhcp ? 2 : '') },
+  };
   async function loadRegistry() {
     const data = await api('registry:list');
     renderRegistry(data);
@@ -201,35 +255,110 @@ export default async function networkView(ctx) {
       }, { testid: 'def-save' })));
 
     const search = input(query, { inputmode: 'text', placeholder: '교실·IP·MAC·모델 찾기', class: 'field search', 'data-testid': 'reg-search' });
-    const listBox = h('div', { class: 'items', 'data-testid': 'reg-list' });
+    const tableBox = h('div', { class: 'table-wrap', 'data-testid': 'reg-list' });
+    let columns = data.columns.slice();
     const drawList = () => {
       const q = query.toLowerCase();
-      const pcs = data.pcs.filter((pc) => !q || [pc.room, pc.pcName, pc.ip, pc.assignedIp, pc.mac, pc.note, ...HW.map(([k]) => pc[k])].some((v) => (v || '').toLowerCase().includes(q)));
-      listBox.replaceChildren(...(pcs.length ? pcs.map(pcRow) : [emptyState(data.pcs.length ? '찾는 교실이 없어요' : '아직 저장한 교실이 없어요', data.pcs.length ? null : '교사에게 받은 메시지를 위에 붙여넣어 저장해 보세요.')]));
+      const pcs = data.pcs.filter((pc) => !q || [pc.room, pc.pcName, pc.ip, pc.assignedIp, pc.mac, pc.note, pc.purchase, ...HW.map(([k]) => pc[k])].some((v) => (v || '').toLowerCase().includes(q)));
+      if (!pcs.length) { tableBox.replaceChildren(emptyState(data.pcs.length ? '찾는 교실이 없어요' : '아직 저장한 교실이 없어요', data.pcs.length ? null : '교사에게 받은 메시지를 위에 붙여넣어 저장해 보세요.')); return; }
+      tableBox.replaceChildren(regTable(sortRows(pcs)));
     };
     search.addEventListener('input', () => { query = search.value.trim(); drawList(); });
 
-    function pcRow(pc) {
-      const tags = [];
-      if (pc.duplicate) tags.push(h('span', { class: 'tag tone-danger' }, 'IP 중복'));
-      if (pc.assignedIp) tags.push(h('span', { class: 'tag tone-warn' }, `변경 대기 → ${pc.assignedIp}`));
-      if (pc.dhcp) tags.push(h('span', { class: 'tag tone-info' }, '자동 IP'));
-      const level = pc.duplicate ? 'danger' : pc.assignedIp ? 'warn' : 'ok';
-      return h('div', { class: `item tone-${level}`, 'data-testid': 'reg-item' },
-        h('div', { class: 'ic' }, icon('monitor')),
-        h('div', { class: 'tx' },
-          h('strong', {}, `${pc.room || '(교실 이름 없음)'}${pc.pcName ? ` · ${pc.pcName}` : ''}`),
-          h('span', {}, `IP ${pc.ip || '-'} · MAC ${pc.mac || '-'} · ${pc.receivedAt ? `받은 날 ${fmtDate(pc.receivedAt)}` : ''}${pc.note ? ` · ${pc.note}` : ''}`),
-          HW.some(([k]) => pc[k]) ? h('span', { class: 'muted small', 'data-testid': 'reg-hw', style: { whiteSpace: 'normal' } }, HW.filter(([k]) => pc[k]).map(([k, l]) => `${l} ${pc[k]}`).join(' · ')) : null,
-          tags.length ? h('div', { class: 'counts' }, tags) : null),
-        btn('network', 'IP 배정', () => assignModal(pc, data.defaults), { testid: 'reg-assign' }),
-        btn('edit', '고치기', () => editModal(pc), { testid: 'reg-edit' }));
+    function sortRows(pcs) {
+      const col = COLS[sort.key] || COLS.room;
+      const val = col.sortVal || ((pc) => String(pc[sort.key] || ''));
+      return [...pcs].sort((a, b) => {
+        const va = val(a), vb = val(b);
+        const ea = va === '' || va == null, eb = vb === '' || vb == null;
+        if (ea !== eb) return ea ? 1 : -1; // 빈 칸은 늘 맨 뒤
+        const c = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb), 'ko', { numeric: true });
+        return sort.dir * c || String(a.room || '').localeCompare(String(b.room || ''), 'ko', { numeric: true });
+      });
+    }
+
+    let dragKey = null;
+    let justDragged = false;
+    async function saveColumns(order) {
+      const r = await api('registry:columns', order);
+      columns = r.columns; data.columns = r.columns;
+      drawList();
+    }
+
+    function regTable(pcs) {
+      const head = h('tr', {}, ...columns.map((k) => {
+        const c = COLS[k];
+        const th = h('th', { 'data-col': k, title: '끌어서 칸 순서를 바꿀 수 있어요. 누르면 정렬해요.' }, c.label, sort.key === k ? h('span', { class: 'sort' }, sort.dir > 0 ? ' ▲' : ' ▼') : null);
+        th.addEventListener('click', () => { if (justDragged) return; sort = sort.key === k ? { key: k, dir: -sort.dir } : { key: k, dir: 1 }; drawList(); });
+        // 마우스로 칸 이름을 끌어 옮기기(조금 움직여야 끌기로 봄, 그냥 누르면 정렬)
+        th.addEventListener('pointerdown', (e) => {
+          if (e.button !== 0) return;
+          const x0 = e.clientX;
+          let target = null;
+          dragKey = null;
+          const ths = () => [...th.closest('tr').querySelectorAll('th[data-col]')];
+          const move = (ev) => {
+            if (!dragKey && Math.abs(ev.clientX - x0) < 8) return;
+            dragKey = k; th.classList.add('dragging');
+            const over = ths().find((t) => { const r = t.getBoundingClientRect(); return ev.clientX >= r.left && ev.clientX < r.right; });
+            ths().forEach((t) => t.classList.toggle('drag-over', t === over && t !== th));
+            target = over && over !== th ? over.dataset.col : null;
+          };
+          const up = () => {
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', up);
+            ths().forEach((t) => t.classList.remove('drag-over', 'dragging'));
+            if (!dragKey) return;
+            justDragged = true; setTimeout(() => { justDragged = false; }, 0);
+            dragKey = null;
+            if (!target) return;
+            const order = columns.filter((x) => x !== k);
+            const at = order.indexOf(target);
+            const after = columns.indexOf(k) < columns.indexOf(target); // 오른쪽으로 옮기면 그 칸 뒤로
+            order.splice(after ? at + 1 : at, 0, k);
+            saveColumns(order);
+          };
+          document.addEventListener('pointermove', move);
+          document.addEventListener('pointerup', up);
+        });
+        return th;
+      }), h('th', { class: 'manage' }, '관리'));
+      const rows = pcs.map((pc) => {
+        const level = pc.duplicate ? 'danger' : pc.assignedIp ? 'warn' : 'ok';
+        return h('tr', { class: `tone-${level}`, 'data-testid': 'reg-item' },
+          ...columns.map((k) => h('td', { 'data-col': k }, COLS[k].cell(pc))),
+          h('td', { class: 'manage' }, h('div', { class: 'btn-row', style: { flexWrap: 'nowrap', gap: '6px' } },
+            btn('network', 'IP 배정', () => assignModal(pc, data.defaults), { testid: 'reg-assign' }),
+            btn('edit', '고치기', () => editModal(pc), { testid: 'reg-edit' }))));
+      });
+      return h('table', { class: 'reg-table' }, h('thead', {}, head), h('tbody', {}, rows));
+    }
+
+    function columnModal() {
+      return modal((close) => {
+        let order = columns.slice();
+        const listEl = h('div', { class: 'col-order' });
+        const draw = () => listEl.replaceChildren(...order.map((k, i) => h('div', { class: 'col-order-row', 'data-testid': 'col-row' },
+          h('span', { style: { flex: '1' } }, COLS[k].label),
+          btn('up', '', () => { if (i > 0) { [order[i - 1], order[i]] = [order[i], order[i - 1]]; draw(); } }, { title: '위로', disabled: i === 0, testid: 'col-up' }),
+          btn('down', '', () => { if (i < order.length - 1) { [order[i + 1], order[i]] = [order[i], order[i + 1]]; draw(); } }, { title: '아래로', disabled: i === order.length - 1, testid: 'col-down' }))));
+        draw();
+        return h('div', {},
+          h('h2', {}, '칸 순서'),
+          h('div', { class: 'body' }, h('div', { class: 'muted small', style: { marginBottom: '10px' } }, '위에 있을수록 표의 왼쪽에 보여요. [관리] 칸은 늘 맨 오른쪽이에요. 표의 칸 이름을 끌어서 옮겨도 돼요.'), listEl),
+          h('div', { class: 'actions' },
+            btn('undo', '처음 순서로', async () => { await saveColumns('reset'); close(true); }, { testid: 'col-reset' }),
+            h('span', { style: { flex: '1' } }),
+            btn('x', '취소', () => close(false)),
+            btn('check', '저장', async () => { await saveColumns(order); close(true); }, { variant: 'primary', testid: 'col-save' })));
+      });
     }
 
     const list = h('section', { class: 'panel' },
       h('div', { class: 'btn-row', style: { padding: '14px 20px', borderBottom: '1px solid var(--hairline)' } },
         h('div', { class: 'section-title', style: { margin: 0, flex: '1' } }, `교실 IP·PC 대장 ${data.pcs.length}대`),
         search,
+        btn('columns', '칸 순서', () => columnModal(), { testid: 'reg-columns' }),
         btn('download', '엑셀(CSV)로 저장', async () => { const r = await api('registry:exportCsv'); if (r.ok) toast('저장했어요'); }, { testid: 'reg-export' }),
         btn('up', 'CSV 가져오기', async () => {
           const r = await api('registry:importCsv');
@@ -238,7 +367,7 @@ export default async function networkView(ctx) {
           toast(`새로 ${r.created}대, 고친 것 ${r.updated}대를 가져왔어요`);
           loadRegistry();
         }, { testid: 'reg-import' })),
-      listBox);
+      tableBox);
     drawList();
     box.replaceChildren(receive, list, defaults);
   }
@@ -275,10 +404,13 @@ export default async function networkView(ctx) {
 
   function editModal(pc) {
     return modal((close) => {
-      const f = { room: input(pc.room, { inputmode: 'text' }), pcName: input(pc.pcName, { inputmode: 'text' }), note: input(pc.note, { inputmode: 'text' }) };
+      const f = { room: input(pc.room, { inputmode: 'text' }), pcName: input(pc.pcName, { inputmode: 'text' }), purchase: input(pc.purchase, { inputmode: 'text', placeholder: '예: 2023.03', 'data-testid': 'edit-purchase' }), note: input(pc.note, { inputmode: 'text' }) };
+      const err = h('div', { class: 'field-err' });
       return h('div', {},
         h('h2', {}, '교실 정보 고치기'),
-        h('div', { class: 'body' }, h('div', { class: 'form', style: { gridTemplateColumns: '100px 1fr' } }, h('label', {}, '교실'), f.room, h('label', {}, 'PC 이름'), f.pcName, h('label', {}, '메모'), f.note)),
+        h('div', { class: 'body' },
+          h('div', { class: 'form', style: { gridTemplateColumns: '100px 1fr' } }, h('label', {}, '교실'), f.room, h('label', {}, 'PC 이름'), f.pcName, h('label', {}, '구입 시기'), f.purchase, h('span'), err, h('label', {}, '메모'), f.note),
+          h('div', { class: 'muted small', style: { marginTop: '12px' } }, `MAC ${pc.mac || '-'}${pc.pcModel ? ` · PC 모델 ${pc.pcModel}` : ''}`)),
         h('div', { class: 'actions' },
           btn('trash', '목록에서 빼기', async () => {
             const ok = await confirmDialog({ title: '목록에서 뺄까요?', body: `${pc.room || pc.pcName} (IP ${pc.ip})`, okLabel: '빼기', okIcon: 'trash', danger: true });
@@ -287,7 +419,11 @@ export default async function networkView(ctx) {
           }),
           h('span', { style: { flex: '1' } }),
           btn('x', '취소', () => close(false)),
-          btn('check', '저장', async () => { await api('registry:update', { id: pc.id, room: f.room.value, pcName: f.pcName.value, note: f.note.value }); close(true); loadRegistry(); }, { variant: 'primary' })));
+          btn('check', '저장', async () => {
+            const r = await api('registry:update', { id: pc.id, room: f.room.value, pcName: f.pcName.value, purchase: f.purchase.value, note: f.note.value });
+            if (!r.ok) { err.textContent = r.msg || '값을 확인해 주세요.'; f.purchase.classList.add('bad'); return; }
+            close(true); loadRegistry();
+          }, { variant: 'primary', testid: 'edit-save' })));
     });
   }
 

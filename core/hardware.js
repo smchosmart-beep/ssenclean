@@ -2,8 +2,6 @@
 // PC 사양(Windows에서 읽은 값)을 대장에 적기 좋은 짧은 글로 바꾼다.
 // → { pcModel, cpu, ram, ssd, monitor, printer } (모두 문자열, 여러 개는 ' / '로 이음)
 
-// 메모리 제조사 JEDEC 코드
-const RAM_MAKERS = { '80CE': '삼성', CE00: '삼성', '00CE': '삼성', '80AD': 'SK하이닉스', AD00: 'SK하이닉스', '00AD': 'SK하이닉스', '802C': '마이크론', '2C00': '마이크론', '002C': '마이크론', '859B': '크루셜', '9B05': '크루셜', '0198': '킹스톤', '9801': '킹스톤', '04CD': 'G.Skill', CD04: 'G.Skill', '029E': '커세어', '9E02': '커세어', '8551': 'Qimonda', '0443': 'Ramaxel', '4304': 'Ramaxel' };
 // 모니터 제조사 PNP 코드
 const MON_MAKERS = { SAM: '삼성', SEC: '삼성', SDC: '삼성디스플레이', GSM: 'LG', LGD: 'LG디스플레이', DEL: 'Dell', HWP: 'HP', HPN: 'HP', LEN: 'Lenovo', ACR: 'Acer', AUS: 'ASUS', BNQ: 'BenQ', PHL: 'Philips', AOC: 'AOC', VSC: 'ViewSonic', BOE: 'BOE', AUO: 'AUO', CMN: 'Innolux', IVM: 'iiyama', ENC: 'EIZO', SHP: 'Sharp', HKC: 'HKC', MSI: 'MSI', GBT: 'Gigabyte', APP: 'Apple', NEC: 'NEC', SNY: 'Sony', TSB: 'Toshiba', CRS: '크로스오버', HSD: '한성', JWK: '주연테크', DMS: '디엠에스' };
 // 실제 기계가 아닌 프린터(PDF 저장·팩스·원노트 등)
@@ -28,24 +26,11 @@ function cpuText(raw) {
   return uniq((raw.cpu || []).map((c) => clean(c).replace(/\s*CPU\s*@/i, ' @').replace(/\s+\d+-Core Processor$/i, ''))).join(' / ');
 }
 
+// RAM은 합계 용량만(예: 32GB). Windows가 알려 주는 전체 메모리는 조금 모자라게 나오므로 반올림.
 function ramText(raw) {
   const mods = (raw.ram || []).filter((m) => m && m.size > 0);
   const total = mods.reduce((a, m) => a + m.size, 0) || raw.ramTotal || 0;
-  if (!total) return '';
-  const head = gbBinary(total);
-  if (!mods.length) return head;
-  const groups = new Map();
-  for (const m of mods) {
-    const code = String(m.maker || '').toUpperCase().replace(/^0X/, '');
-    const maker = RAM_MAKERS[code] || (ok(m.maker) && !/^[0-9A-F]{4}$/.test(code) ? clean(m.maker) : '');
-    const key = [gbBinary(m.size), maker, ok(m.part) ? clean(m.part) : '', m.speed || m.speed2 || 0].join('|');
-    groups.set(key, (groups.get(key) || 0) + 1);
-  }
-  const parts = [...groups].map(([k, n]) => {
-    const [size, maker, part, speed] = k.split('|');
-    return [`${size}×${n}`, [maker, part].filter(Boolean).join(' '), Number(speed) ? `${speed}MHz` : ''].filter(Boolean).join(' ');
-  });
-  return `${head} (${parts.join(', ')})`;
+  return total ? gbBinary(total) : '';
 }
 
 function diskType(d) {
@@ -55,12 +40,16 @@ function diskType(d) {
   return '';
 }
 
-function ssdText(raw) {
+// 저장장치는 SSD와 HDD를 나눠 용량만. 여러 개면 ' + '로 잇고, 종류를 모르면 SSD 칸에 '(종류 모름)'.
+function diskTexts(raw) {
   const list = (raw.disks || []).filter((d) => d && d.size > 0 && !/usb|^7$/i.test(String(d.bus || '')) && !/usb/i.test(d.model || ''));
-  return list.map((d) => {
+  const ssd = [], hdd = [];
+  for (const d of list) {
     const t = diskType(d);
-    return `${clean(d.model) || '이름 없음'} (${[t, gbDecimal(d.size)].filter(Boolean).join(' ')})`;
-  }).join(' / ');
+    if (t === 'HDD') hdd.push(gbDecimal(d.size));
+    else ssd.push(t ? gbDecimal(d.size) : `${gbDecimal(d.size)}(종류 모름)`);
+  }
+  return { ssd: ssd.join(' + '), hdd: hdd.join(' + ') };
 }
 
 function monitorText(raw) {
@@ -98,11 +87,32 @@ function summarize(raw) {
   const model = ok(raw.model) ? clean(raw.model) : '';
   return {
     pcModel: [maker, model].filter(Boolean).join(' '),
-    cpu: cpuText(raw), ram: ramText(raw), ssd: ssdText(raw), monitor: monitorText(raw), printer: printerText(raw),
+    cpu: cpuText(raw), ram: ramText(raw), ...diskTexts(raw), monitor: monitorText(raw), printer: printerText(raw),
   };
 }
 
-// 화면·메시지·대장에서 같은 순서와 이름을 쓴다.
-const HW_FIELDS = [['pcModel', 'PC 모델'], ['cpu', 'CPU'], ['ram', 'RAM'], ['ssd', 'SSD'], ['monitor', '모니터'], ['printer', '프린터']];
+// 1.6.0 형식(제조사·모델명까지 적은 값)을 용량만 남긴 새 형식으로 바꾼다.
+//  RAM '32GB (16GB×2 …)' → '32GB'
+//  SSD 'KLEVV … (SSD 1TB) / WDC … (SSD 500GB) / SAMSUNG HD502HJ (HDD 500GB)' → SSD '1TB + 500GB', HDD '500GB'
+function normalizeHw(hw) {
+  if (!hw) return hw;
+  const out = { ...hw };
+  if (out.ram) { const m = String(out.ram).match(/^\s*(\d+(?:\.\d+)?\s*[GT]B)/i); if (m) out.ram = m[1].replace(/\s+/g, ''); }
+  if (out.ssd && /\((?:SSD|HDD)?\s*[\d.]+\s*[GT]B\)/i.test(out.ssd)) {
+    const ssd = [], hdd = [];
+    for (const part of String(out.ssd).split(' / ')) {
+      const m = part.match(/\((SSD|HDD)?\s*([\d.]+\s*[GT]B)\)\s*$/i);
+      if (!m) continue;
+      const size = m[2].replace(/\s+/g, '');
+      if (/hdd/i.test(m[1] || '')) hdd.push(size); else ssd.push(m[1] ? size : `${size}(종류 모름)`);
+    }
+    out.ssd = ssd.join(' + ');
+    if (!out.hdd) out.hdd = hdd.join(' + ');
+  }
+  return out;
+}
 
-module.exports = { summarize, HW_FIELDS, gbDecimal };
+// 화면·메시지·대장에서 같은 순서와 이름을 쓴다.
+const HW_FIELDS = [['pcModel', 'PC 모델'], ['cpu', 'CPU'], ['ram', 'RAM'], ['ssd', 'SSD'], ['hdd', 'HDD'], ['monitor', '모니터'], ['printer', '프린터']];
+
+module.exports = { summarize, normalizeHw, HW_FIELDS, gbDecimal };

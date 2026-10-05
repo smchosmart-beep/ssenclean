@@ -107,6 +107,12 @@ test('폰트: 사용 주의 정리 → 되돌리기, 미리보기 폰트 로드'
   await win.getByTestId('fonts-undo').click();
   await expect(win.locator('.hero h1')).toContainText('사용 주의 폰트');
   await win.getByTestId('font-tab-school').click();
+  await expect(win.getByTestId('school-family')).toHaveCount(20);
+  await win.getByTestId('school-family').filter({ hasText: '학교안심 바른돋움' }).getByTestId('school-install-one').click();
+  await expect(win.getByTestId('school-family').filter({ hasText: '학교안심 바른돋움' })).toContainText('설치됨');
+  await win.getByTestId('school-more').click();
+  await expect.poll(async () => (await mockLog()).some((l) => l.op === 'openExternal' && l.url.startsWith('https://copyright.keris.or.kr/wft/fntDwnld'))).toBeTruthy();
+  await shot('03b-school-fonts');
   await win.getByTestId('install-school').click();
   await expect(win.locator('text=모두 설치되어 있어요')).toBeVisible();
 });
@@ -312,7 +318,43 @@ test('IP 주소: 정보부장 - 받은 내용 저장 → 교실 목록 → IP �
   await app.evaluate(() => { global.__sen.platform.clipboard.write('[쎈클린 IP 정보] 3학년 1반\nPC이름 SM-3-1\nIP 10.20.3.41 / 서브넷 255.255.255.0 / 게이트웨이 10.20.3.1\nMAC AA-BB-CC-DD-EE-01'); });
   await win.getByTestId('reg-paste-save').click();
   await expect(win.getByTestId('reg-item')).toHaveCount(2);
-  await expect(win.getByTestId('reg-item').filter({ hasText: '3학년 2반' }).getByTestId('reg-hw')).toContainText('CPU Intel Core i5-12400');
+  const row2 = win.getByTestId('reg-item').filter({ hasText: '3학년 2반' });
+  await expect(row2.locator('td[data-col=cpu]')).toContainText('Intel Core i5-12400');
+  await expect(row2.locator('td[data-col=ram]')).toHaveText('16GB');
+  await expect(row2.locator('td[data-col=ssd]')).toHaveText('512GB'); // 1.6.0 형식도 용량만
+  await expect(row2.locator('td[data-col=hdd]')).toHaveText('-');
+  // 구입 시기: 칸을 눌러 입력 → Enter
+  await row2.getByTestId('reg-purchase').click();
+  await row2.getByTestId('reg-purchase-input').fill('23년 3월');
+  await row2.getByTestId('reg-purchase-input').press('Enter');
+  await expect(row2.getByTestId('reg-purchase')).toHaveText('2023.03');
+  // 칸 순서: 머리줄 끌기 + [칸 순서] 창, 다시 들어와도 유지
+  const heads = () => win.locator('.reg-table th[data-col]').evaluateAll((els) => els.map((e) => e.dataset.col));
+  expect((await heads()).slice(0, 4)).toEqual(['room', 'pcName', 'ip', 'mac']);
+  // 마우스로 칸 이름을 끌어 맨 앞으로
+  const dragHead = async (from, to) => {
+    const a = await win.locator(`.reg-table th[data-col=${from}]`).boundingBox();
+    const b = await win.locator(`.reg-table th[data-col=${to}]`).boundingBox();
+    await win.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+    await win.mouse.down();
+    await win.mouse.move(b.x + 10, b.y + b.height / 2, { steps: 8 });
+    await win.mouse.up();
+  };
+  await dragHead('ram', 'room');
+  await expect.poll(async () => (await heads())[0]).toBe('ram');
+  expect(await win.locator('.reg-table th .sort').count()).toBe(1); // 끌기는 정렬로 바뀌지 않음
+  await win.getByTestId('reg-columns').click();
+  await win.getByTestId('col-row').nth(2).getByTestId('col-up').click(); // pcName을 위로
+  await win.getByTestId('col-save').click();
+  await expect.poll(async () => (await heads()).slice(0, 3)).toEqual(['ram', 'pcName', 'room']);
+  await win.getByTestId('tab-mine').click();
+  await win.getByTestId('tab-registry').click();
+  expect((await heads()).slice(0, 3)).toEqual(['ram', 'pcName', 'room']);
+  await expect(win.locator('.reg-table th.manage')).toHaveText('관리');
+  await shot('11a-registry-table');
+  await win.getByTestId('reg-columns').click();
+  await win.getByTestId('col-reset').click();
+  await expect.poll(async () => (await heads())[0]).toBe('room');
   await win.getByTestId('reg-search').fill('M2020');
   await expect(win.getByTestId('reg-item')).toHaveCount(1);
   await win.getByTestId('reg-search').fill('');

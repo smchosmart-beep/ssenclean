@@ -48,7 +48,7 @@ function validate({ dhcp, ip, mask, gateway, dns1, dns2 }) {
 }
 
 // ── 메시지 ──
-const { HW_FIELDS } = require('./hardware');
+const { HW_FIELDS, normalizeHw } = require('./hardware');
 const HW_MARK = '── PC 사양 ──';
 
 function teacherMessage(info, room, hw) {
@@ -88,6 +88,7 @@ function parseMessage(text) {
     const m = hwPart.match(new RegExp(`^\\s*${label.replace(/ /g, '\\s*')}\\s*[:：]?\\s+(.+)$`, 'im'));
     if (m && m[1].trim() !== '-') { out.hw = out.hw || {}; out.hw[k] = m[1].trim(); }
   }
+  if (out.hw) out.hw = normalizeHw(out.hw); // 1.6.0 메시지도 용량만 남겨 읽음
   const head = t.match(/\[쎈(?:클린|Clean) IP (정보|변경)\]\s*([^\n]*)/) /* 1.3.0 이전 메시지도 읽음 */;
   if (head) { out.kind = head[1] === '정보' ? 'info' : 'assign'; out.room = head[2].trim(); }
   const after = (labelRe) => { const m = t.match(new RegExp(`(?:${labelRe})\\s*[:：=]?\\s*(${IP_RE.source})`, 'i')); return m ? m[0].match(IP_RE)[0] : ''; };

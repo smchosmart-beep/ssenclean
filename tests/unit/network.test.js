@@ -150,8 +150,9 @@ test('불러오기는 버튼을 누를 때만, PC 사양을 메시지·대장·C
   assert.strictEqual(l.snapshot.primary.ip, '10.20.3.42');
   assert.strictEqual(hw.pcModel, 'SAMSUNG DM500TDA');
   assert.strictEqual(hw.cpu, 'Intel Core i5-12400 @ 2.50GHz');
-  assert.strictEqual(hw.ram, '16GB (8GB×2 삼성 M378A1K43EB2-CWE 3200MHz)');
-  assert.strictEqual(hw.ssd, 'SAMSUNG MZVL2512HCJQ-00B07 (SSD 512GB)', 'USB 메모리는 빼기');
+  assert.strictEqual(hw.ram, '16GB', 'RAM은 합계만');
+  assert.strictEqual(hw.ssd, '512GB', 'SSD는 용량만, USB 메모리는 빼기');
+  assert.strictEqual(hw.hdd, '');
   assert.strictEqual(hw.monitor, '삼성 S24R35x / LG FHD');
   assert.strictEqual(hw.printer, 'Samsung M2020 Series (기본) / Canon iR-ADV C3525 UFR II', 'PDF 저장 같은 가상 프린터는 빼기');
   assert.strictEqual(svc.last().snapshot.at, l.snapshot.at, '다시 들어와도 저장한 값 그대로');
@@ -176,7 +177,7 @@ test('불러오기는 버튼을 누를 때만, PC 사양을 메시지·대장·C
   assert.strictEqual(svc.registryList().pcs[0].ram, hw.ram);
 
   const csv = svc.exportCsv();
-  assert.ok(parseCsv(csv)[0].join(',').includes('PC모델,CPU,RAM,SSD,모니터,프린터'));
+  assert.ok(parseCsv(csv)[0].join(',').includes('CPU,RAM,SSD,HDD,모니터,프린터,구입시기'));
   const env2 = freshEnv();
   t.after(env2.cleanup);
   const svc2 = createNetworkService(env2);
@@ -192,4 +193,47 @@ test('불러오기는 버튼을 누를 때만, PC 사양을 메시지·대장·C
   assert.strictEqual(summarize(null), null);
   assert.strictEqual(gbDecimal(1000204886016), '1TB');
   assert.strictEqual(summarize({ monitors: [{ maker: 'BOE', name: '', code: '0A9D' }] }).monitor, 'BOE (제품코드 0A9D)');
+});
+
+test('대장: 1.6.0 형식 사양 변환, 구입 시기, 칸 순서 저장·CSV 순서', async (t) => {
+  const { normalizePurchase } = require('../../core/network');
+  const env = freshEnv();
+  t.after(env.cleanup);
+  const svc = createNetworkService(env);
+  // 1.6.0 메시지(제조사·모델명까지) → 용량만, SSD/HDD 나눔
+  const old = '[쎈Clean IP 정보] 우리집\nPC이름 DESKTOP-691SS21\nIP 192.168.0.3 / 서브넷 255.255.255.0 / 게이트웨이 192.168.0.1\nMAC 60-CF-84-CB-77-5B\n방식 고정 IP\n── PC 사양 ──\nPC 모델 ASUS\nCPU Intel Core i5-14400F\nRAM 32GB (16GB×2 Essencore Limited KD4AGUA80-32N2200 3200MHz)\nSSD KLEVV CRAS C910 M.2 NVMe SSD 1TB (SSD 1TB) / WDC WDS500G2B0A-00SM50 (SSD 500GB) / SAMSUNG HD502HJ (HDD 500GB)\n모니터 BenQ EW2775ZH / BenQ GW2780\n프린터 -';
+  const r = svc.registryImport(old);
+  assert.ok(r.ok);
+  const pc = svc.registryList().pcs[0];
+  assert.deepStrictEqual([pc.ram, pc.ssd, pc.hdd], ['32GB', '1TB + 500GB', '500GB']);
+  // 이미 1.6.0으로 저장된 대장도 보일 때 변환
+  const raw = env.store.read('ip-registry.json', {});
+  Object.assign(raw.pcs[0], { ram: '32GB (16GB×2 x)', ssd: 'A (SSD 1TB) / B (HDD 2TB)', hdd: '' });
+  env.store.write('ip-registry.json', raw);
+  const pc2 = svc.registryList().pcs[0];
+  assert.deepStrictEqual([pc2.ram, pc2.ssd, pc2.hdd], ['32GB', '1TB', '2TB']);
+
+  // 구입 시기: 형식 맞춤, 잘못된 값 거부, 메시지를 다시 받아도 유지
+  assert.deepStrictEqual(['2023-3', '23년 3월', '2023', '202303', ''].map(normalizePurchase), ['2023.03', '2023.03', '2023', '2023.03', '']);
+  assert.strictEqual(normalizePurchase('2023.13'), null);
+  assert.strictEqual(svc.registryUpdate(pc.id, { purchase: '3월쯤' }).field, 'purchase');
+  assert.strictEqual(svc.registryUpdate(pc.id, { purchase: '2021-9' }).record.purchase, '2021.09');
+  svc.registryImport(old);
+  assert.strictEqual(svc.registryList().pcs[0].purchase, '2021.09');
+
+  // 칸 순서: 기본 → 바꿔 저장 → 다시 읽어도 유지, CSV도 그 순서, 처음 순서로
+  assert.deepStrictEqual(svc.registryList().columns.slice(0, 4), ['room', 'pcName', 'ip', 'mac']);
+  svc.setColumns(['purchase', 'ip', 'room', 'bogus']);
+  const cols = createNetworkService(env).registryList().columns;
+  assert.deepStrictEqual(cols.slice(0, 4), ['purchase', 'ip', 'room', 'pcName']);
+  assert.strictEqual(cols.length, 13);
+  assert.ok(!cols.includes('bogus'));
+  const head = parseCsv(svc.exportCsv())[0];
+  assert.deepStrictEqual(head.slice(0, 3), ['구입시기', 'IP', '교실']);
+  const env2 = freshEnv();
+  t.after(env2.cleanup);
+  const svc2 = createNetworkService(env2);
+  svc2.importCsv(svc.exportCsv());
+  assert.deepStrictEqual([svc2.registryList().pcs[0].purchase, svc2.registryList().pcs[0].hdd], ['2021.09', '500GB']);
+  assert.deepStrictEqual(svc.setColumns('reset').columns.slice(0, 2), ['room', 'pcName']);
 });

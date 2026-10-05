@@ -2,7 +2,7 @@
 // IP 주소 메뉴. 교사: 내 IP 알려주기·받은 IP로 바꾸기 / 정보부장: 교실별 IP 목록·배정 메시지.
 const crypto = require('crypto');
 const M = require('./network-msg');
-const { summarize, HW_FIELDS } = require('./hardware');
+const { summarize, normalizeHw, HW_FIELDS } = require('./hardware');
 
 const REGISTRY = 'ip-registry.json';
 const DEFAULTS = { mask: '255.255.255.0', dns1: '', dns2: '', gwRule: '.1' };
@@ -30,8 +30,24 @@ function parseCsv(text) {
 }
 const CSV_COLS = [
   ['room', '교실'], ['pcName', 'PC이름'], ['ip', 'IP'], ['mask', '서브넷'], ['gateway', '게이트웨이'], ['dns1', 'DNS1'], ['dns2', 'DNS2'],
-  ['mac', 'MAC'], ['dhcp', '방식'], ...HW_FIELDS.map(([k, l]) => [k, l.replace(/ /g, '')]), ['receivedAt', '받은 날'], ['assignedIp', '배정 IP'], ['assignedAt', '배정한 날'], ['note', '메모'],
+  ['mac', 'MAC'], ['dhcp', '방식'], ...HW_FIELDS.map(([k, l]) => [k, l.replace(/ /g, '')]), ['purchase', '구입시기'], ['receivedAt', '받은 날'], ['assignedIp', '배정 IP'], ['assignedAt', '배정한 날'], ['note', '메모'],
 ];
+// 대장 표의 칸(관리 칸은 늘 맨 오른쪽이라 여기 없음). 순서는 정보부장이 바꿀 수 있고 저장된다.
+const TABLE_COLS = ['room', 'pcName', 'ip', 'mac', 'cpu', 'ram', 'ssd', 'hdd', 'monitor', 'printer', 'purchase', 'receivedAt', 'status'];
+
+// 구입 시기: '2023.03' 또는 '2023'. 2023-3, 2023/03, 23년 3월, 202303 등도 맞춰 준다.
+function normalizePurchase(v) {
+  const t = String(v || '').trim();
+  if (!t) return '';
+  const m = t.match(/^(\d{4}|\d{2})\s*(?:[.\-/년]\s*|(?=\d{2}$))?(?:(\d{1,2})\s*월?)?\s*\.?$/);
+  if (!m) return null;
+  let y = Number(m[1]); if (m[1].length === 2) y += 2000;
+  if (y < 1990 || y > new Date().getFullYear() + 1) return null;
+  if (!m[2]) return String(y);
+  const mo = Number(m[2]);
+  if (mo < 1 || mo > 12) return null;
+  return `${y}.${String(mo).padStart(2, '0')}`;
+}
 const SNAPSHOT = 'pc-info.json';
 const day = (t) => (t ? new Date(t).toISOString().slice(0, 10) : '');
 
@@ -67,6 +83,7 @@ function createNetworkService({ platform, store }) {
 
   function last() {
     const snap = store.read(SNAPSHOT, null);
+    if (snap && snap.hardware) snap.hardware = normalizeHw(snap.hardware);
     const s = store.settings.get();
     return { snapshot: snap, room: s.room || '', role: s.role || 'user', canUndo: !!store.read('network-undo.json', null) };
   }
@@ -88,7 +105,21 @@ function createNetworkService({ platform, store }) {
 
   function registryData() {
     const r = store.read(REGISTRY, null) || {};
-    return { defaults: { ...DEFAULTS, ...(r.defaults || {}) }, pcs: r.pcs || [] };
+    // 1.6.0에 저장한 사양(제조사·모델명까지)은 용량만 남겨 보여 준다.
+    const pcs = (r.pcs || []).map((pc) => Object.assign(pc, normalizeHw(pc)));
+    return { defaults: { ...DEFAULTS, ...(r.defaults || {}) }, pcs, columns: columnsOf(r.columns) };
+  }
+
+  function columnsOf(saved) {
+    const ok = Array.isArray(saved) ? saved.filter((k) => TABLE_COLS.includes(k)) : [];
+    return [...new Set([...ok, ...TABLE_COLS.filter((k) => !ok.includes(k))])]; // 새로 생긴 칸은 뒤에
+  }
+
+  function setColumns(order) {
+    const r = registryData();
+    r.columns = order === 'reset' || !Array.isArray(order) ? TABLE_COLS.slice() : columnsOf(order);
+    saveRegistry(r);
+    return { ok: true, columns: r.columns };
   }
 
   // 받은 메시지를 읽어 칸을 채운다(빈 칸은 학교 기본값·추천값으로).
@@ -165,7 +196,7 @@ function createNetworkService({ platform, store }) {
     const r = registryData();
     const pcs = r.pcs.map((pc) => ({ ...pc, duplicate: duplicatesOf(r, ipOf(pc), pc.id).length > 0 }));
     pcs.sort((a, b) => (a.room || '').localeCompare(b.room || '', 'ko', { numeric: true }) || (a.pcName || '').localeCompare(b.pcName || ''));
-    return { defaults: r.defaults, pcs };
+    return { defaults: r.defaults, pcs, columns: r.columns };
   }
 
   function upsert(r, p, source = 'message') {
@@ -197,6 +228,11 @@ function createNetworkService({ platform, store }) {
     const r = registryData();
     const pc = r.pcs.find((x) => x.id === id);
     if (!pc) return { ok: false };
+    if (typeof patch.purchase === 'string') {
+      const v = normalizePurchase(patch.purchase);
+      if (v == null) return { ok: false, field: 'purchase', msg: '구입 시기는 2023.03처럼 연.월로 적어 주세요(연도만 2023도 돼요).' };
+      pc.purchase = v;
+    }
     for (const k of ['room', 'pcName', 'note']) if (typeof patch[k] === 'string') pc[k] = patch[k].trim();
     saveRegistry(r);
     return { ok: true, record: pc };
@@ -243,10 +279,13 @@ function createNetworkService({ platform, store }) {
   }
 
   function exportCsv() {
-    const { pcs } = registryList();
-    const lines = [CSV_COLS.map((c) => c[1]).join(',')];
+    const { pcs, columns } = registryList();
+    // 화면 칸 순서대로, 화면에 없는 칸(서브넷·DNS·PC 모델·메모 등)은 뒤에
+    const byKey = Object.fromEntries(CSV_COLS);
+    const cols = [...columns.filter((k) => byKey[k]).map((k) => [k, byKey[k]]), ...CSV_COLS.filter(([k]) => !columns.includes(k))];
+    const lines = [cols.map((c) => c[1]).join(',')];
     for (const pc of pcs) {
-      lines.push(CSV_COLS.map(([k]) => {
+      lines.push(cols.map(([k]) => {
         if (k === 'dhcp') return csvCell(pc.dhcp ? '자동' : '고정');
         if (k === 'receivedAt' || k === 'assignedAt') return csvCell(day(pc[k]));
         return csvCell(pc[k]);
@@ -270,6 +309,8 @@ function createNetworkService({ platform, store }) {
       if (!p.ip && !p.mac) continue;
       const res = upsert(r, p, 'csv');
       if (g('note')) res.pc.note = g('note');
+      const pv = normalizePurchase(g('purchase'));
+      if (pv) res.pc.purchase = pv;
       if (g('assignedIp') && M.isIp(g('assignedIp')) && g('assignedIp') !== res.pc.ip) res.pc.assignedIp = g('assignedIp');
       if (res.created) created++; else updated++;
     }
@@ -279,8 +320,8 @@ function createNetworkService({ platform, store }) {
 
   return {
     info, load, last, myMessage, parse, apply, undo, check,
-    registryList, registryImport, registryUpdate, registryDelete, setDefaults, assign, exportCsv, importCsv,
+    registryList, registryImport, registryUpdate, registryDelete, setDefaults, setColumns, assign, exportCsv, importCsv,
   };
 }
 
-module.exports = { createNetworkService, parseCsv };
+module.exports = { createNetworkService, parseCsv, normalizePurchase, TABLE_COLS };

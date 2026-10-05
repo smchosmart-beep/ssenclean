@@ -246,3 +246,35 @@ textarea.field { height: auto; min-height: 96px; padding: 10px 12px; resize: ver
 .linkish:hover span { text-decoration: underline; }
 .linkish svg { width: 17px; height: 17px; stroke: var(--brand); fill: none; stroke-width: 2; }
 .tree .node.file.kept .fname { color: var(--ink-mute); text-decoration: line-through; }
+
+/* 교실 IP·PC 대장 표 (1.7.0) */
+textarea.field { width: 100%; }
+.table-wrap { overflow: auto; max-height: 62vh; }
+.reg-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: 15px; }
+.reg-table th { position: sticky; top: 0; z-index: 2; background: var(--surface); text-align: left; padding: 11px 12px; font-weight: 700; color: var(--ink-strong); border-bottom: 2px solid var(--hairline); white-space: nowrap; cursor: pointer; user-select: none; }
+.reg-table th:hover { background: var(--canvas); }
+.reg-table th.drag-over { box-shadow: inset 3px 0 0 var(--primary); }
+.reg-table th .sort { color: var(--primary); font-size: 12px; }
+.reg-table td { padding: 9px 12px; border-bottom: 1px solid var(--hairline); white-space: nowrap; vertical-align: middle; }
+.reg-table tbody tr:hover td { background: #FAF9F6; }
+.reg-table tr td:first-child { box-shadow: inset 4px 0 0 var(--tc); }
+.reg-table .manage { position: sticky; right: 0; z-index: 1; background: var(--surface); box-shadow: -1px 0 0 var(--hairline); cursor: default; }
+.reg-table th.manage { z-index: 3; }
+.reg-table .btn { height: 34px; padding: 0 10px; font-size: 14px; }
+.reg-table .cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reg-table .cell.editable { cursor: text; min-width: 80px; padding: 2px 6px; margin: -2px -6px; border-radius: 6px; border: 1px dashed transparent; }
+.reg-table .cell.editable:hover, .reg-table .cell.editable:focus { border-color: var(--btn-line); outline: none; }
+.reg-table .cell-input { height: 34px; width: 110px; font-size: 15px; }
+.col-order { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; }
+.col-order-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--hairline); border-radius: var(--r-sm); }
+.col-order-row .btn { height: 34px; width: 38px; padding: 0; }
+.col-order-row .btn span:empty { display: none; }
+
+/* 학교안심 자연은 보통 굵기(R)뿐이라 획이 가늘다 → 글자색 테두리로 조금 두껍게 (1.7.0, 계획 23) */
+.btn { -webkit-text-stroke: .5px currentColor; letter-spacing: .2px; }
+.btn.primary { -webkit-text-stroke: .4px currentColor; }
+.hero h1, .cd-head h1, .ipbig, .cd-card .big, .empty .big { -webkit-text-stroke: .7px currentColor; letter-spacing: .3px; }
+.dday { -webkit-text-stroke: .6px currentColor; }
+.reg-table .btn { -webkit-text-stroke: .4px currentColor; }
+.reg-table th.dragging { opacity: .5; }
+.reg-table th { touch-action: none; }

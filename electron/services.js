@@ -46,7 +46,7 @@ function createServices({ platform, spawnScan, emit }) {
   };
   s.dashboard = createDashboard(s);
 
-  const ALLOWED_EXTERNAL = [/^https:\/\/account\.microsoft\.com\//];
+  const ALLOWED_EXTERNAL = [/^https:\/\/account\.microsoft\.com\//, /^https:\/\/copyright\.keris\.or\.kr\//];
 
   const channels = {
     'app:info': () => ({ version: require('../package.json').version, mock: platform.kind === 'mock', user: platform.user.name }),
@@ -81,7 +81,7 @@ function createServices({ platform, spawnScan, emit }) {
     'fonts:clean': (ids) => s.fonts.clean(ids),
     'fonts:undo': (id) => s.fonts.undo(id),
     'fonts:openArchive': () => s.fonts.openArchive(),
-    'fonts:installSchool': () => s.fonts.installSchool(),
+    'fonts:installSchool': (ids) => s.fonts.installSchool(ids),
 
     'password:status': () => s.password.status({ refresh: true }),
     'password:change': (o) => s.password.change(o || {}),
@@ -149,6 +149,7 @@ function createServices({ platform, spawnScan, emit }) {
     'registry:update': (o) => s.network.registryUpdate(o && o.id, o || {}),
     'registry:delete': (id) => s.network.registryDelete(id),
     'registry:defaults': (d) => s.network.setDefaults(d || {}),
+    'registry:columns': (order) => s.network.setColumns(order),
     'registry:assign': (o) => s.network.assign(o && o.id, o || {}),
   };
 
