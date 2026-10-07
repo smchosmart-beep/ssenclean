@@ -1,4 +1,4 @@
-import { h, btn, api, hero, pageHead, tip, toast, confirmDialog, checkbox, icon, fmtBytes, emptyState, pendingCard } from '../ui.js';
+import { h, btn, api, hero, pageHead, tip, toast, confirmDialog, checkbox, icon, fmtBytes, emptyState, pendingCard, statusRow } from '../ui.js';
 
 const KIND_ICON = { shortcut: 'link', 'fake-shortcut': 'link', url: 'globe', startup: 'play', 'startup-machine': 'play', task: 'calendar', program: 'trash', proxy: 'globe', extension: 'plus', homepage: 'home', search: 'search' };
 
@@ -8,8 +8,9 @@ export default async function browserView(ctx) {
   const selected = new Set();
   const box = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '14px' } });
   const tabsEl = h('div', { class: 'tabs' });
-  const defBox = h('div', {});
-  ctx.main.append(pageHead('브라우저 청소', '광고창·광고 팝업·쇼핑 아이콘의 원인을 찾아 없애고, 방문 기록을 지워요.', tabsEl), defBox, box);
+  // 기본 브라우저 줄: 광고 결과 아래 상태 목록(다른 메뉴와 같은 줄 모양) 안에 들어간다
+  const defBox = h('div', { class: 'row-slot' });
+  ctx.main.append(pageHead('브라우저 청소', '광고창·광고 팝업·쇼핑 아이콘의 원인을 찾아 없애고, 방문 기록을 지워요.', tabsEl), box);
 
   // ── 기본 브라우저: 크롬으로 ──
   let alive = true;
@@ -20,37 +21,42 @@ export default async function browserView(ctx) {
     if (!alive) return;
     if (st.isChrome) {
       if (waiting) { waiting = null; toast('크롬이 기본 브라우저가 됐어요'); }
-      defBox.replaceChildren(h('section', { class: 'panel pad tone-ok', 'data-testid': 'default-browser', style: { display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 24px' } },
-        h('div', { class: 'ic' }, icon('checkCircle')), h('div', { style: { flex: '1' } }, h('strong', {}, '기본 브라우저: 크롬'), h('span', { class: 'muted small' }, '  · 링크를 누르면 크롬으로 열려요')),
-        settingsBtn()));
+      defBox.replaceChildren(statusRow({ level: 'ok', iconName: 'globe', title: '기본 브라우저: 크롬', desc: '링크·바로가기를 누르면 크롬으로 열려요.', tag: '설정됨', right: settingsBtn(), testid: 'default-browser' }));
       return;
     }
-    const guide = waiting
+    if (!st.chromeInstalled) {
+      defBox.replaceChildren(statusRow({ level: 'info', iconName: 'globe', title: `기본 브라우저: ${st.name}`, desc: '크롬이 설치되어 있지 않아요. 크롬을 설치한 뒤 다시 확인해 주세요.', tag: '크롬 없음', right: settingsBtn(), testid: 'default-browser' }));
+      return;
+    }
+    const josa = (n) => ((n.charCodeAt(n.length - 1) - 0xAC00) % 28 ? '이에요' : '예요');
+    const desc = waiting
       ? (waiting.win11 ? 'Windows 설정 창이 열렸어요. 맨 위의 [기본값으로 설정]을 한 번 누르세요. 바뀌면 여기 표시가 저절로 바뀌어요.' : "Windows 설정 창이 열렸어요. '웹 브라우저' 아래 지금 브라우저를 누르고 'Google Chrome'을 고르세요.")
-      : `${st.id === 'unknown' ? '지금 기본 브라우저를 확인하지 못했어요' : `지금 기본 브라우저는 ${st.name}${(st.name.charCodeAt(st.name.length - 1) - 0xAC00) % 28 ? '이에요' : '예요'}`}. 링크·바로가기를 크롬으로 열려면 크롬을 기본 브라우저로 정하세요.`;
-    defBox.replaceChildren(h('section', { class: `panel pad tone-${waiting ? 'info' : 'warn'}`, 'data-testid': 'default-browser', style: { display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 24px' } },
-      h('div', { class: 'ic' }, icon('globe')),
-      h('div', { style: { flex: '1' } }, h('strong', { style: { display: 'block' } }, st.chromeInstalled ? `기본 브라우저: ${st.name}` : '크롬이 설치되어 있지 않아요'), h('span', { class: 'muted small' }, st.chromeInstalled ? guide : '크롬을 설치한 뒤 다시 확인해 주세요.')),
-      st.chromeInstalled ? btn('globe', waiting ? '설정 창 다시 열기' : '크롬을 기본 브라우저로', async () => {
-        const r = await api('browser:makeChromeDefault');
-        if (r.already) { drawDefault(); return; }
-        if (!r.ok) { toast('크롬을 찾지 못했어요'); return; }
-        waiting = { win11: r.win11 };
-        drawDefault();
-        // 사용자가 설정 창에서 고를 때까지 2분 동안 확인
-        clearInterval(pollTimer);
-        let n = 0;
-        pollTimer = setInterval(async () => {
-          n++;
-          const now = await api('browser:defaultBrowser');
-          if (!alive || now.isChrome || n > 80) { clearInterval(pollTimer); if (alive) drawDefault(); }
-        }, 1500);
-      }, { variant: waiting ? '' : 'primary', testid: 'make-chrome-default' }) : null,
-      waiting ? null : settingsBtn()));
+      : `${st.id === 'unknown' ? '지금 기본 브라우저를 확인하지 못했어요' : `지금은 ${st.name}${josa(st.name)}`}. 링크·바로가기를 크롬으로 열려면 크롬을 기본 브라우저로 정하세요.`;
+    const makeBtn = btn('globe', waiting ? '설정 창 다시 열기' : '크롬을 기본으로', async () => {
+      const r = await api('browser:makeChromeDefault');
+      if (r.already) { drawDefault(); return; }
+      if (!r.ok) { toast('크롬을 찾지 못했어요'); return; }
+      waiting = { win11: r.win11 };
+      drawDefault();
+      // 사용자가 설정 창에서 고를 때까지 2분 동안 확인
+      clearInterval(pollTimer);
+      let n = 0;
+      pollTimer = setInterval(async () => {
+        n++;
+        const now = await api('browser:defaultBrowser');
+        if (!alive || now.isChrome || n > 80) { clearInterval(pollTimer); if (alive) drawDefault(); }
+      }, 1500);
+    }, { variant: waiting ? 'auto' : 'primary auto', testid: 'make-chrome-default' });
+    defBox.replaceChildren(statusRow({
+      level: waiting ? 'info' : 'warn', iconName: 'globe', title: `기본 브라우저: ${st.name}`, desc,
+      tag: waiting ? '설정 중' : '크롬 아님',
+      right: waiting ? makeBtn : h('div', { class: 'btn-row', style: { flexWrap: 'nowrap', gap: '8px' } }, makeBtn, settingsBtn()),
+      testid: 'default-browser',
+    }));
   }
   // 크롬이 기본이어도 Windows 기본 앱 설정으로 바로 가는 버튼은 늘 둔다
   function settingsBtn() {
-    return btn('gear', '기본 앱 설정 열기', async () => { await api('browser:openDefaultApps'); toast('Windows 기본 앱 설정을 열었어요'); }, { testid: 'open-default-apps' });
+    return btn('gear', '기본 앱 설정 열기', async () => { await api('browser:openDefaultApps'); toast('Windows 기본 앱 설정을 열었어요'); }, { variant: 'auto', testid: 'open-default-apps' });
   }
   drawDefault();
 
@@ -60,17 +66,25 @@ export default async function browserView(ctx) {
       btn('trash', '기록 지우기', () => { tab = 'history'; renderTabs(); show(); }, { variant: tab === 'history' ? 'on' : '', testid: 'tab-history' }));
   }
 
-  function runningBox(running, after) {
-    if (!running || !running.length) return null;
-    return h('section', { class: 'panel pad tone-warn', style: { display: 'flex', alignItems: 'center', gap: '16px' } },
-      h('div', { style: { flex: '1' } }, tip(`${running.map((r) => r.label).join('·')}가 열려 있어요. 닫은 뒤 청소하면 더 확실해요.`, 'warn')),
-      btn('x', '모두 닫기', async () => {
-        const ok = await confirmDialog({ title: '브라우저를 모두 닫을까요?', body: '작성 중인 글이 있으면 먼저 저장해 주세요.', okLabel: '모두 닫기', okIcon: 'x' });
-        if (!ok) return;
-        const left = await api('browser:close');
-        toast(left.length ? '일부 창이 닫히지 않았어요. 직접 닫아 주세요' : '브라우저를 닫았어요');
-        after();
-      }, { testid: 'close-browsers' }));
+  // 상태 목록(다른 메뉴와 같은 줄 모양): 기본 브라우저 + 열려 있는 브라우저
+  function statusPanel(running, after, withDefault) {
+    const rows = [];
+    if (withDefault) rows.push(defBox);
+    if (running && running.length) {
+      rows.push(statusRow({
+        level: 'warn', iconName: 'warn', title: `${running.map((r) => r.label).join('·')}가 열려 있어요`,
+        desc: '닫은 뒤 청소하면 더 확실해요. 작성 중인 글이 있으면 먼저 저장하세요.', tag: '열려 있음',
+        right: btn('x', '모두 닫기', async () => {
+          const ok = await confirmDialog({ title: '브라우저를 모두 닫을까요?', body: '작성 중인 글이 있으면 먼저 저장해 주세요.', okLabel: '모두 닫기', okIcon: 'x' });
+          if (!ok) return;
+          const left = await api('browser:close');
+          toast(left.length ? '일부 창이 닫히지 않았어요. 직접 닫아 주세요' : '브라우저를 닫았어요');
+          after();
+        }, { testid: 'close-browsers' }),
+        testid: 'running-browsers',
+      }));
+    }
+    return rows.length ? h('section', { class: 'panel rows' }, rows) : null;
   }
 
   // ── 광고 없애기 ──
@@ -130,7 +144,7 @@ export default async function browserView(ctx) {
         desc: scan.items.length ? '항목마다 왜 의심되는지 적어 두었어요.' : '바로가기·시작 프로그램·예약 작업·브라우저 설정을 확인했어요.',
         right: h('div', { class: 'btn-row' }, heroSlot, btn('refresh', '다시 찾기', runScan, { testid: 'ad-rescan' })),
       }),
-      runningBox(scan.running, runScan),
+      statusPanel(scan.running, runScan, true),
     ];
     if (fixable.length) {
       footerEl = h('div', { class: 'footer-bar sticky', 'data-testid': 'ad-footer' });
@@ -161,7 +175,7 @@ export default async function browserView(ctx) {
       checkbox(`쿠키 (${fmtBytes(sum('cookies'))}) - 지우면 사이트 로그인이 풀려요`, pick.cookies, (v) => { pick.cookies = v; }, { testid: 'h-cookies' }));
     drawKinds();
     box.replaceChildren(...[
-      runningBox(running, renderHistory),
+      statusPanel(running, renderHistory, false),
       h('section', { class: 'panel pad' },
         h('div', { class: 'section-title' }, '어떤 브라우저를 청소할까요?'),
         h('div', { class: 'btn-row' }, sizes.map((s) => checkbox(s.label, true, (v) => { if (v) pick.browsers.add(s.browser); else pick.browsers.delete(s.browser); drawKinds(); }, { testid: `h-${s.browser}` }))),

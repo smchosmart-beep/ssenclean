@@ -280,3 +280,6 @@ textarea.field { width: 100%; }
 .reg-table th { touch-action: none; }
 .dropzone { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border: 2px dashed var(--btn-line); border-radius: var(--r-md); background: var(--canvas); }
 .dropzone.over { border-color: var(--primary); background: var(--mint); }
+.row .btn.auto { width: auto; min-width: 140px; }
+.row-slot > .row { border-bottom: 1px solid var(--hairline); }
+.row-slot:last-child > .row { border-bottom: 0; }

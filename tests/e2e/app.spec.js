@@ -264,6 +264,7 @@ test('브라우저 청소: 광고 치료 → 기록 지우기', async () => {
   await expect.poll(async () => (await mockLog()).some((l) => l.op === 'openExternal' && l.url === 'ms-settings:defaultapps?registeredAppMachine=Google%20Chrome')).toBeTruthy();
   await app.evaluate(() => { const p = global.__sen.platform; p.reg.write('HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice', 'ProgId', p.REG.SZ, 'ChromeHTML'); });
   await expect(win.getByTestId('default-browser')).toContainText('기본 브라우저: 크롬', { timeout: 6000 });
+  await shot('07c-browser-chrome');
   await win.getByTestId('open-default-apps').click();
   await expect(win.locator('.toast').last()).toContainText('기본 앱 설정을 열었어요');
   await expect(win.getByTestId('ad-item').first()).toBeVisible({ timeout: 20000 });
