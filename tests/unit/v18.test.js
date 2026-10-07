@@ -21,7 +21,8 @@ test('크롬을 내려받는 동안 점검 현황은 "업데이트 중"(최신�
   // 끝나면 '다시 켜면 적용'
   await new Promise((res) => setTimeout(res, 800));
   const c2 = await dash.check('updates');
-  assert.match(c2.title, /PC를 다시 켜면/);
+  assert.match(c2.title, /크롬을 다시 시작하면/);
+  assert.strictEqual(c2.action.label, '크롬 다시 시작');
 });
 
 test('우리 교실 이름은 입력하면 바로 저장', async (t) => {
@@ -74,4 +75,15 @@ test('기본 브라우저: 지금 브라우저 확인 → 크롬 설정 창 열�
   env.platform.reg.write('HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoiceLatest', 'ProgId', env.platform.REG.SZ, 'MSEdgeHTM');
   assert.strictEqual((await b.makeChromeDefault()).win11, false);
   assert.ok(env.platform._log().some((l) => l.op === 'openExternal' && l.url === 'ms-settings:defaultapps'));
+});
+
+test('기본 앱 설정 열기: 크롬이 기본이어도 열 수 있음', async (t) => {
+  const env = freshEnv();
+  t.after(env.cleanup);
+  env.platform.reg.write('HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice', 'ProgId', env.platform.REG.SZ, 'ChromeHTML');
+  const b = createBrowserService(env);
+  assert.strictEqual(b.defaultBrowser().isChrome, true);
+  const r = await b.openDefaultApps();
+  assert.ok(r.opened);
+  assert.ok(env.platform._log().some((l) => l.op === 'openExternal' && l.url.startsWith('ms-settings:defaultapps')));
 });

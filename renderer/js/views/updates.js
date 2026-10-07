@@ -1,4 +1,4 @@
-import { h, btn, api, onEvent, hero, pageHead, tip, statusRow, toast, fmtDate, modal, pendingCard } from '../ui.js';
+import { h, btn, api, onEvent, hero, pageHead, tip, statusRow, toast, fmtDate, modal, pendingCard, confirmDialog } from '../ui.js';
 
 const ICON = { chrome: 'globe', windows: 'monitor', hangul: 'file', office: 'file' };
 const PHASE_TEXT = {
@@ -27,12 +27,13 @@ export default async function updatesView(ctx) {
   ctx.main.append(pageHead('업데이트', '크롬, Windows, 한글, MS오피스가 최신인지 확인하고 바로 업데이트해요.'), box);
   let list = [];
   let chromeLive = null; // 진행 중 표시
+  let alive = true;
 
   const off = onEvent('updates:progress', (ev) => {
     if (ev.id !== 'chrome') return;
     if (ev.final) {
       chromeLive = null;
-      if (ev.phase === 'done') toast('새 버전을 받아 두었어요. PC를 다시 켜면 적용돼요');
+      if (ev.phase === 'done') toast('새 버전을 받아 두었어요. [크롬 다시 시작]을 누르면 적용돼요');
       else if (ev.phase === 'latest') toast('크롬이 이미 최신이에요');
       else if (ev.phase === 'opened') toast("크롬 정보 화면을 열었어요. 업데이트가 끝나면 [다시 시작]을 눌러 주세요");
       else if (ev.phase === 'guide') toast('크롬 오른쪽 위 ⋮ → 설정 → Chrome 정보에서 업데이트하세요');
@@ -49,18 +50,18 @@ export default async function updatesView(ctx) {
     const live = chromeLive || (u.state === 'updating' ? u.progress : null);
     if (live) {
       level = 'warn'; tag = '업데이트 중';
-      desc = `${PHASE_TEXT[live.phase] || '업데이트하고 있어요'}${live.percent != null ? ` ${live.percent}%` : ''}`;
+      desc = `${PHASE_TEXT[live.phase] || '업데이트하고 있어요'}${live.percent != null ? ` ${live.percent}%` : ''} · 구글 서버에서 받느라 오래 걸릴 수 있어요. 다른 일을 해도 돼요, 끝나면 알려 드려요`;
       right = btn('refresh', '진행 중', null, { disabled: true, testid: 'upd-chrome' });
     } else if (u.state === 'restart') {
-      level = 'warn'; tag = 'PC를 다시 켜면 적용돼요';
-      desc = '새 버전을 받아 두었어요. PC를 다시 켜면 크롬이 새 버전으로 바뀌어요. 지금 바로 바꾸려면 크롬 설정 → Chrome 정보에서 [다시 시작]을 누르세요.';
-      right = null; // 반복 클릭을 막기 위해 버튼 없음
+      level = 'warn'; tag = '다시 시작하면 적용돼요';
+      desc = `새 버전${u.newVersion ? `(${u.newVersion})` : ''}을 받아 두었어요. 크롬을 다시 시작하면 적용돼요. 열려 있던 탭은 그대로 돌아와요.${u.restartTried ? ' 다시 시작해도 바뀌지 않으면 PC를 다시 켜도 적용돼요.' : ''}`;
+      right = btn('refresh', '크롬 다시 시작', restartChrome, { variant: 'primary', testid: 'upd-chrome-restart' });
     } else if (u.state === 'outdated') {
       level = 'warn'; tag = '업데이트 있음';
       desc = [u.version ? `현재 ${u.version}` : null, u.latest ? `새 버전 ${u.latest}` : null].filter(Boolean).join(' · ');
       right = btn('up', '업데이트', async () => {
         const r = await api('updates:run', 'chrome');
-        if (r.inline) { chromeLive = { phase: 'checking' }; render(); } else if (r.guide) toast(r.guide);
+        if (r.inline) { chromeLive = { phase: 'checking' }; render(); } else if (r.restart) run(); else if (r.guide) toast(r.guide);
       }, { testid: 'upd-chrome' });
     } else if (u.state === 'latest') {
       level = 'ok'; tag = '최신';
@@ -72,6 +73,20 @@ export default async function updatesView(ctx) {
       }, { testid: 'upd-chrome' });
     }
     return statusRow({ level, iconName: ICON.chrome, title: u.name, desc, tag, right, testid: 'upd-row-chrome' });
+  }
+
+  // 크롬의 [다시 시작]과 같게(크롬이 스스로 다시 시작, 열린 탭 복원)
+  let recheckTimers = [];
+  async function restartChrome() {
+    const ok = await confirmDialog({ title: '크롬을 다시 시작할까요?', body: '크롬 창이 잠깐 닫혔다가 다시 열려요. 열려 있던 탭은 그대로 돌아와요. 작성 중인 글이 있으면 먼저 저장하세요.', okLabel: '다시 시작', okIcon: 'refresh' });
+    if (!ok) return;
+    const r = await api('updates:run', 'chrome-restart');
+    if (!r.ok) { toast('크롬을 찾지 못했어요'); return; }
+    if (r.restarted) toast('크롬을 다시 시작했어요. 잠시 뒤 새 버전인지 확인할게요');
+    else if (r.launched) toast('크롬을 켰어요. 잠시 뒤 새 버전인지 확인할게요');
+    else if (r.guide) toast(r.guide);
+    recheckTimers.forEach(clearTimeout);
+    recheckTimers = [5000, 20000].map((ms) => setTimeout(() => { if (alive) run(); }, ms));
   }
 
   function row(u) {
@@ -108,9 +123,12 @@ export default async function updatesView(ctx) {
   async function run() {
     if (!list.length) box.replaceChildren(pendingCard('업데이트 확인 중…', '크롬·Windows·한글·오피스 버전을 확인하고 있어요 (Windows는 1분 정도 걸릴 수 있어요)'));
     list = await api('updates:check');
+    if (!alive) return;
     render();
   }
 
   await run();
-  return () => off();
+  // 점검 현황의 [크롬 다시 시작]으로 들어왔으면 바로 확인 창
+  if (ctx.params.autostart && list.some((u) => u.id === 'chrome' && u.state === 'restart')) restartChrome();
+  return () => { alive = false; off(); recheckTimers.forEach(clearTimeout); };
 }

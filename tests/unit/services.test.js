@@ -257,14 +257,47 @@ test('업데이트: 크롬 업데이트 진행률 → 재부팅 안내', async (
   assert.ok(phases.includes('downloading') && phases.includes('installing'));
   assert.ok(events.some((e) => e.phase === 'downloading' && e.percent === 100));
   assert.strictEqual(events[events.length - 1].phase, 'done');
+  const c1 = (await svc.check()).find((u) => u.id === 'chrome');
+  assert.deepStrictEqual([c1.state, c1.newVersion], ['restart', '140.0.7339.128']);
+  // 대기 파일이 아직 없어도(크롬이 늦게 만듦) 막 업데이트했으면 '다시 시작 필요'
+  const app = path.join(env.platform.paths.programFiles, 'Google', 'Chrome', 'Application');
+  fs.unlinkSync(path.join(app, 'new_chrome.exe'));
   assert.strictEqual((await svc.check()).find((u) => u.id === 'chrome').state, 'restart');
-  // 다시 눌러도 크롬을 끄거나 켜지 않고 재부팅 안내만
-  const rr = await svc.run('chrome');
-  assert.ok(rr.ok && /PC를 다시 켜면/.test(rr.guide));
+  assert.strictEqual((await svc.run('chrome')).restart, true, '업데이트 버튼 대신 다시 시작');
+  // [크롬 다시 시작]: 크롬을 강제로 끄지 않고 주소창에 chrome://restart
+  const rs = await svc.run('chrome-restart');
+  assert.ok(rs.ok && rs.restarted);
   const log = env.platform._log();
+  assert.ok(log.some((l) => l.op === 'omnibox' && l.url === 'chrome://restart'));
   assert.ok(!log.some((l) => l.op === 'close' && l.image === 'chrome.exe'));
-  assert.ok(!log.some((l) => l.op === 'launch' && /chrome\.exe$/.test(l.file)));
+  assert.strictEqual((await svc.check()).find((u) => u.id === 'chrome').state, 'latest');
+});
+
+test('업데이트: 다시 시작 대기 신호(opv·cmd, 새 버전 폴더), 자동 입력이 안 되면 크롬 정보 화면', async (t) => {
+  const env = freshEnv();
+  t.after(env.cleanup);
+  const st = env.platform._state();
+  st.chromeUpdate.available = false; // 구글 업데이트는 '최신'이라고 답하는 시차
+  const svc = createUpdateService(env);
+  const app = path.join(env.platform.paths.programFiles, 'Google', 'Chrome', 'Application');
+  assert.strictEqual((await svc.check()).find((u) => u.id === 'chrome').state, 'latest');
+  // ② 이름 바꾸기 대기(opv·cmd)
+  const key = 'HKLM\\SOFTWARE\\WOW6432Node\\Google\\Update\\Clients\\{8A69D345-D564-463C-AFF1-A69D9E530F96}';
+  env.platform.reg.write(key, 'opv', env.platform.REG.SZ, '128.0.6613.120');
   assert.strictEqual((await svc.check()).find((u) => u.id === 'chrome').state, 'restart');
+  env.platform.reg.del(key, 'opv');
+  // ③ 새 버전 폴더가 지금 버전보다 높음
+  fs.mkdirSync(path.join(app, '154.0.8037.98'), { recursive: true });
+  fs.mkdirSync(path.join(app, '128.0.6613.120'), { recursive: true });
+  const c = (await svc.check()).find((u) => u.id === 'chrome');
+  assert.deepStrictEqual([c.state, c.newVersion], ['restart', '154.0.8037.98']);
+  // 자동 입력이 안 되는 PC → 크롬 정보 화면 안내
+  st.omniboxFails = true;
+  const r = await svc.run('chrome-restart');
+  assert.ok(r.ok && /\[다시 시작\]/.test(r.guide));
+  assert.strictEqual((await svc.check()).find((u) => u.id === 'chrome').restartTried, true);
+  fs.rmSync(path.join(app, '154.0.8037.98'), { recursive: true });
+  assert.strictEqual((await svc.check()).find((u) => u.id === 'chrome').state, 'latest');
 });
 
 test('업데이트: 구글 업데이트를 못 쓰면 주소창 대체, 서버 번호는 2판 이상 뒤처질 때만', async (t) => {

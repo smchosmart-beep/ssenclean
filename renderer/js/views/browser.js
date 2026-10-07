@@ -21,7 +21,8 @@ export default async function browserView(ctx) {
     if (st.isChrome) {
       if (waiting) { waiting = null; toast('크롬이 기본 브라우저가 됐어요'); }
       defBox.replaceChildren(h('section', { class: 'panel pad tone-ok', 'data-testid': 'default-browser', style: { display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 24px' } },
-        h('div', { class: 'ic' }, icon('checkCircle')), h('div', { style: { flex: '1' } }, h('strong', {}, '기본 브라우저: 크롬'), h('span', { class: 'muted small' }, '  · 링크를 누르면 크롬으로 열려요'))));
+        h('div', { class: 'ic' }, icon('checkCircle')), h('div', { style: { flex: '1' } }, h('strong', {}, '기본 브라우저: 크롬'), h('span', { class: 'muted small' }, '  · 링크를 누르면 크롬으로 열려요')),
+        settingsBtn()));
       return;
     }
     const guide = waiting
@@ -44,7 +45,12 @@ export default async function browserView(ctx) {
           const now = await api('browser:defaultBrowser');
           if (!alive || now.isChrome || n > 80) { clearInterval(pollTimer); if (alive) drawDefault(); }
         }, 1500);
-      }, { variant: waiting ? '' : 'primary', testid: 'make-chrome-default' }) : null));
+      }, { variant: waiting ? '' : 'primary', testid: 'make-chrome-default' }) : null,
+      waiting ? null : settingsBtn()));
+  }
+  // 크롬이 기본이어도 Windows 기본 앱 설정으로 바로 가는 버튼은 늘 둔다
+  function settingsBtn() {
+    return btn('gear', '기본 앱 설정 열기', async () => { await api('browser:openDefaultApps'); toast('Windows 기본 앱 설정을 열었어요'); }, { testid: 'open-default-apps' });
   }
   drawDefault();
 

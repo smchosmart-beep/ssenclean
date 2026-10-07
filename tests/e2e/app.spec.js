@@ -134,21 +134,27 @@ test('PC암호: 만들기 → D-day', async () => {
   await expect(win.getByTestId('nav-password').locator('.dot')).toHaveClass(/ok/);
 });
 
-test('업데이트: 크롬을 쎈Clean 안에서 업데이트 → 재부팅 안내, 한글 업데이트 프로그램', async () => {
+test('업데이트: 크롬을 쎈Clean 안에서 업데이트 → [크롬 다시 시작], 한글 업데이트 프로그램', async () => {
   await win.getByTestId('nav-updates').click();
   const row = win.getByTestId('upd-row-chrome');
   await expect(row).toContainText('업데이트 있음', { timeout: 20000 });
   await expect(row).toContainText('새 버전 140.0.7339.128');
   await shot('05-updates');
   await win.getByTestId('upd-chrome').click();
-  await expect(row).toContainText('PC를 다시 켜면 적용돼요', { timeout: 15000 });
-  await expect(win.getByTestId('upd-chrome')).toHaveCount(0); // 다시 켜기 버튼 없음(반복 방지)
+  await expect(row).toContainText('다시 시작하면 적용돼요', { timeout: 15000 });
+  await expect(row).toContainText('새 버전(140.0.7339.128)');
   await shot('05b-updates-restart');
   const log = await mockLog();
   expect(log.some((l) => l.op === 'chromeInstall')).toBeTruthy();
-  expect(log.some((l) => l.op === 'close' && l.image === 'chrome.exe')).toBeFalsy(); // 크롬을 끄지 않음
-  // 재부팅 뒤(대기 파일이 적용되면) 최신
-  fs.rmSync(path.join(root, 'Program Files', 'Google', 'Chrome', 'Application', 'new_chrome.exe'), { force: true });
+  // 점검 현황에서도 [크롬 다시 시작] → 업데이트 화면에서 확인 창
+  await win.getByTestId('nav-dashboard').click();
+  await expect(win.getByTestId('dash-updates')).toContainText('크롬을 다시 시작하면', { timeout: 20000 });
+  await win.getByTestId('dash-action-updates').click();
+  await expect(win.locator('.modal h2').last()).toContainText('크롬을 다시 시작할까요?');
+  await win.getByTestId('confirm-ok').click();
+  await expect.poll(async () => (await mockLog()).some((l) => l.op === 'omnibox' && l.url === 'chrome://restart')).toBeTruthy();
+  expect((await mockLog()).some((l) => l.op === 'close' && l.image === 'chrome.exe')).toBeFalsy(); // 크롬을 강제로 끄지 않음
+  // 다시 시작 뒤 새 버전 → 최신
   await win.getByTestId('upd-recheck').click();
   await expect(row).toContainText('최신', { timeout: 15000 });
   await expect(win.getByTestId('upd-row-hangul')).toContainText('12.0.0.3650');
@@ -258,6 +264,8 @@ test('브라우저 청소: 광고 치료 → 기록 지우기', async () => {
   await expect.poll(async () => (await mockLog()).some((l) => l.op === 'openExternal' && l.url === 'ms-settings:defaultapps?registeredAppMachine=Google%20Chrome')).toBeTruthy();
   await app.evaluate(() => { const p = global.__sen.platform; p.reg.write('HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice', 'ProgId', p.REG.SZ, 'ChromeHTML'); });
   await expect(win.getByTestId('default-browser')).toContainText('기본 브라우저: 크롬', { timeout: 6000 });
+  await win.getByTestId('open-default-apps').click();
+  await expect(win.locator('.toast').last()).toContainText('기본 앱 설정을 열었어요');
   await expect(win.getByTestId('ad-item').first()).toBeVisible({ timeout: 20000 });
   await shot('07-browser');
   await win.getByTestId('ad-fix').click();

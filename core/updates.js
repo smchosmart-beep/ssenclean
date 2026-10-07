@@ -39,6 +39,8 @@ function createUpdateService({ platform, emit = () => {} }) {
   const R = platform.reg;
   let chromeJob = null;      // 진행 중인 크롬 업데이트
   let chromeProgress = null; // 마지막 진행 상황
+  let justUpdated = null;    // 쎈Clean 안에서 업데이트를 마친 새 버전(대기 파일이 늦게 생겨도 바로 '다시 시작 필요')
+  let restartTried = null;   // [크롬 다시 시작]을 누른 시각
 
   function chromeExe() {
     const cands = [
@@ -49,9 +51,29 @@ function createUpdateService({ platform, emit = () => {} }) {
     return cands.find((c) => platform.exists(c)) || null;
   }
 
-  // 업데이트는 끝났지만 크롬을 다시 켜야 적용되는 상태(크롬이 new_chrome.exe를 남겨 둠)
-  function chromeNeedsRestart(exe) {
-    return !!exe && platform.exists(path.join(path.dirname(exe), 'new_chrome.exe'));
+  // 업데이트는 끝났지만 크롬을 다시 시작해야 적용되는 상태.
+  // 크롬이 업데이트를 마친 직후에는 구글 업데이트가 '최신'이라고 답하는데 대기 파일(new_chrome.exe)은 조금 뒤에 생긴다.
+  // 그 시차에도 틀리지 않게 여러 신호를 본다(하나라도 맞으면 대기):
+  //  ① new_chrome.exe  ② 구글 업데이트 등록 정보의 opv·cmd(이름 바꾸기 대기)  ③ 설치된 버전 폴더가 지금 쓰는 버전보다 높음  ④ 쎈Clean 안에서 막 업데이트함
+  const CLIENT_KEYS = [`HKLM\\SOFTWARE\\WOW6432Node\\Google\\Update\\Clients\\${CHROME_APP_ID}`, `HKLM\\SOFTWARE\\Google\\Update\\Clients\\${CHROME_APP_ID}`, `HKCU\\Software\\Google\\Update\\Clients\\${CHROME_APP_ID}`];
+  const VER_RE = /^\d+\.\d+\.\d+\.\d+$/;
+  function chromePending(exe, current) {
+    if (!exe) return null;
+    const dir = path.dirname(exe);
+    let newest = null;
+    try { for (const d of fs.readdirSync(dir)) if (VER_RE.test(d) && (!newest || cmpVersion(d, newest) > 0)) newest = d; } catch { /* none */ }
+    const val = (k, n) => { try { const v = R.read(k, n); return v && v.value != null ? String(v.value) : ''; } catch { return ''; } };
+    let renamePending = false, pv = '';
+    for (const k of CLIENT_KEYS) {
+      if (val(k, 'opv') || val(k, 'cmd')) renamePending = true;
+      const x = val(k, 'pv');
+      if (x && VER_RE.test(x) && (!pv || cmpVersion(x, pv) > 0)) pv = x;
+    }
+    const target = [newest, pv, justUpdated && justUpdated.version].filter((x) => x && VER_RE.test(x)).sort(cmpVersion).pop() || null;
+    const newer = !!(current && target && cmpVersion(target, current) > 0);
+    if (justUpdated && current && justUpdated.version && cmpVersion(current, justUpdated.version) >= 0) justUpdated = null; // 이미 바뀜
+    const pending = platform.exists(path.join(dir, 'new_chrome.exe')) || renamePending || newer || !!justUpdated;
+    return pending ? { newVersion: newer ? target : (justUpdated && justUpdated.version) || null } : null;
   }
 
   // 학교 정책: 0 = 업데이트 끔, 1 = 항상, 2 = 수동만, 3 = 자동만
@@ -62,15 +84,22 @@ function createUpdateService({ platform, emit = () => {} }) {
     return app != null ? app : get('UpdateDefault');
   }
 
+  // 지금 쓰는(마지막으로 실행한) 크롬 버전
+  function currentChromeVersion() {
+    return (R.read('HKCU\\Software\\Google\\Chrome\\BLBeacon', 'version') || {}).value
+      || (R.read('HKLM\\SOFTWARE\\Google\\Chrome\\BLBeacon', 'version') || {}).value || null;
+  }
+
   async function checkChrome() {
     const exe = chromeExe();
-    let version = (R.read('HKCU\\Software\\Google\\Chrome\\BLBeacon', 'version') || {}).value
-      || (R.read('HKLM\\SOFTWARE\\Google\\Chrome\\BLBeacon', 'version') || {}).value || null;
+    let version = currentChromeVersion();
     if (!exe && !version) return null;
     if (!version && exe) version = await platform.fileVersion(exe);
     const base = { id: 'chrome', name: '크롬', version, canUpdate: !!exe };
     if (chromeJob) return { ...base, state: 'updating', progress: chromeProgress };
-    if (chromeNeedsRestart(exe)) return { ...base, state: 'restart' };
+    const pend = chromePending(exe, version);
+    if (pend) return { ...base, state: 'restart', newVersion: pend.newVersion, restartTried: !!restartTried && Date.now() - restartTried < 30 * 60000 };
+    restartTried = null;
     const policy = chromePolicy();
 
     // 이 PC의 구글 업데이트에 직접 묻는다(크롬 정보 화면과 같은 답).
@@ -184,6 +213,7 @@ function createUpdateService({ platform, emit = () => {} }) {
         emit('updates:progress', { id: 'chrome', phase: opened ? 'opened' : 'guide', final: true });
         return;
       }
+      if (res.phase === 'done') justUpdated = { version: res.version || null, at: Date.now() };
       emit('updates:progress', { id: 'chrome', ...res, final: true });
     }).catch(() => {
       chromeJob = null;
@@ -198,10 +228,22 @@ function createUpdateService({ platform, emit = () => {} }) {
         const exe = chromeExe();
         if (!exe) return { ok: false, guide: '크롬 오른쪽 위 ⋮ → 설정 → Chrome 정보에서 업데이트하세요.' };
         if (chromeJob) return { ok: true, inline: true };
-        // 새 버전을 받아 둔 상태: 쎈Clean이 크롬을 직접 다시 켜지 않는다(완전히 꺼지지 않으면 적용되지 않음). 재부팅 안내만.
-        if (chromeNeedsRestart(exe)) return { ok: true, guide: 'PC를 다시 켜면 크롬이 새 버전으로 바뀌어요.' };
+        if (chromePending(exe, currentChromeVersion())) return { ok: true, restart: true };
         startChromeUpdate(exe);
         return { ok: true, inline: true };
+      }
+      // 크롬의 [다시 시작]과 같게: 크롬이 스스로 다시 시작하도록 주소창에 chrome://restart를 넣는다(열린 탭이 돌아옴).
+      // 쎈Clean이 크롬을 강제로 끄고 켜면 새 버전으로 바뀌지 않으므로(1.4까지의 문제) 그렇게 하지 않는다.
+      case 'chrome-restart': {
+        const exe = chromeExe();
+        if (!exe) return { ok: false };
+        restartTried = Date.now();
+        const running = (await platform.processes()).includes('chrome.exe');
+        if (!running) { platform.launch(exe, []); return { ok: true, launched: true }; }
+        const ok = await platform.chromeUpdate.openUrlViaOmnibox(exe, 'chrome://restart');
+        if (ok) return { ok: true, restarted: true };
+        const help = await platform.chromeUpdate.openUrlViaOmnibox(exe, 'chrome://settings/help');
+        return { ok: true, guide: help ? '크롬 정보 화면을 열었어요. 오른쪽 [다시 시작]을 누르세요.' : '크롬 오른쪽 위 ⋮ → 도움말 → Chrome 정보에서 [다시 시작]을 누르세요.' };
       }
       case 'windows':
         winCache = null;

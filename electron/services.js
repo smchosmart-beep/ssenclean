@@ -127,6 +127,7 @@ function createServices({ platform, spawnScan, emit }) {
     'browser:scan': () => s.browser.scan(),
     'browser:defaultBrowser': () => s.browser.defaultBrowser(),
     'browser:makeChromeDefault': () => s.browser.makeChromeDefault(),
+    'browser:openDefaultApps': () => s.browser.openDefaultApps(),
     'browser:fix': (ids) => s.browser.fix(ids),
     'browser:undo': () => s.browser.undo(),
     'browser:reset': (b) => s.browser.openReset(b === 'edge' ? 'edge' : 'chrome'),

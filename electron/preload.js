@@ -13,7 +13,7 @@ const INVOKE = [
   'uninstall:open',
   'cdrive:status', 'cdrive:scan', 'cdrive:stop', 'cdrive:results', 'cdrive:move', 'cdrive:remove', 'cdrive:emptyRecycle', 'cdrive:openRecycle', 'cdrive:undo', 'cdrive:openFolder', 'cdrive:reveal', 'cdrive:prefs',
   'desktop:status', 'desktop:plan', 'desktop:apply', 'desktop:undo', 'desktop:history', 'desktop:openArchive',
-  'browser:scan', 'browser:defaultBrowser', 'browser:makeChromeDefault', 'browser:fix', 'browser:undo', 'browser:reset', 'browser:running', 'browser:close', 'browser:sizes', 'browser:clean',
+  'browser:scan', 'browser:defaultBrowser', 'browser:makeChromeDefault', 'browser:openDefaultApps', 'browser:fix', 'browser:undo', 'browser:reset', 'browser:running', 'browser:close', 'browser:sizes', 'browser:clean',
   'app:copy', 'app:paste',
   'network:info', 'network:load', 'network:last', 'network:setRoom', 'network:myMessage', 'network:parse', 'network:apply', 'network:validate', 'network:undo', 'network:check',
   'registry:list', 'registry:importTexts', 'registry:importFiles', 'network:saveFile', 'registry:import', 'registry:update', 'registry:delete', 'registry:defaults', 'registry:columns', 'registry:assign', 'registry:exportCsv', 'registry:importCsv',

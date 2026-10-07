@@ -69,10 +69,13 @@ function createChromeUpdater() {
       return toEvent(last) || { phase: 'unavailable' };
     },
     // COM을 못 쓰는 PC용: 크롬 새 창을 띄우고 주소창에 크롬 정보 주소를 붙여 넣는다.
-    async openHelpViaOmnibox(exe) {
+    openHelpViaOmnibox(exe) { return this.openUrlViaOmnibox(exe, 'chrome://settings/help'); },
+    // 크롬 내부 주소(chrome://…)는 명령줄로 열 수 없어서, 새 창의 주소창에 붙여넣고 Enter를 누른다.
+    async openUrlViaOmnibox(exe, url) {
+      if (!/^chrome:\/\/(settings\/help|restart)$/.test(url)) return false;
       const r = await runPowerShell(`
 $old=$null; try { $old=Get-Clipboard -Raw } catch {}
-Set-Clipboard -Value 'chrome://settings/help'
+Set-Clipboard -Value ${psQuote(url)}
 Start-Process -FilePath ${psQuote(exe)} -ArgumentList '--new-window','about:blank'
 Start-Sleep -Milliseconds 2000
 $w=New-Object -ComObject WScript.Shell

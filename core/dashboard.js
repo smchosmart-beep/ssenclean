@@ -50,7 +50,7 @@ function createDashboard(s) {
       }
       const restart = list.find((u) => u.state === 'restart');
       if (restart && list.filter((u) => u.state === 'outdated').length === 0) {
-        return card('updates', 'warn', 'PC를 다시 켜면 크롬 업데이트가 적용돼요', '새 버전을 받아 두었어요.', { kind: 'navigate', target: 'updates', label: '자세히', icon: 'search' });
+        return card('updates', 'warn', '크롬을 다시 시작하면 업데이트가 적용돼요', `새 버전${restart.newVersion ? `(${restart.newVersion})` : ''}을 받아 두었어요. 열려 있던 탭은 그대로 돌아와요.`, { kind: 'navigate', target: 'updates', label: '크롬 다시 시작', icon: 'refresh', autostart: true });
       }
       const out = list.filter((u) => u.state === 'outdated' || u.state === 'restart');
       const go = { kind: 'navigate', target: 'updates', label: '업데이트', icon: 'up' };

@@ -488,20 +488,23 @@ function createBrowserService({ platform, store, dataDir }) {
     const m = PROG.find(([re]) => re.test(progId));
     return { progId, id: m ? m[1] : (progId ? 'other' : 'unknown'), name: m ? m[2] : (progId ? '다른 브라우저' : '알 수 없음'), isChrome: !!m && m[1] === 'chrome', chromeInstalled: !!findBrowserExe('chrome.exe') };
   }
-  async function makeChromeDefault() {
-    const st = defaultBrowser();
-    if (st.isChrome) return { ok: true, already: true };
+  // Windows 11: 크롬 설정 화면으로 바로(맨 위 [기본값으로 설정] 한 번), Windows 10(또는 크롬 없음): 기본 앱 화면
+  async function openDefaultApps() {
     const exe = findBrowserExe('chrome.exe');
-    if (!exe) return { ok: false, code: 'no-chrome' };
     const build = Number(platform.osBuild) || 0;
-    const perUser = lc(exe).startsWith(lc(P.localAppData));
-    // Windows 11: 크롬 설정 화면으로 바로(맨 위 [기본값으로 설정] 한 번), Windows 10: 기본 앱 화면
-    const url = build >= 22000 ? `ms-settings:defaultapps?${perUser ? 'registeredAppUser' : 'registeredAppMachine'}=Google%20Chrome` : 'ms-settings:defaultapps';
+    const perUser = !!exe && lc(exe).startsWith(lc(P.localAppData));
+    const url = build >= 22000 && exe ? `ms-settings:defaultapps?${perUser ? 'registeredAppUser' : 'registeredAppMachine'}=Google%20Chrome` : 'ms-settings:defaultapps';
     await platform.shell.openExternal(url);
     return { ok: true, opened: true, win11: build >= 22000 };
   }
+  async function makeChromeDefault() {
+    const st = defaultBrowser();
+    if (st.isChrome) return { ok: true, already: true };
+    if (!findBrowserExe('chrome.exe')) return { ok: false, code: 'no-chrome' };
+    return openDefaultApps();
+  }
 
-  return { defaultBrowser, makeChromeDefault, scan, quickCount, fix, undo: undoFix, openReset, runningBrowsers, closeBrowsers, historySizes, cleanHistory };
+  return { defaultBrowser, makeChromeDefault, openDefaultApps, scan, quickCount, fix, undo: undoFix, openReset, runningBrowsers, closeBrowsers, historySizes, cleanHistory };
 }
 
 module.exports = { createBrowserService, exeFromCommand };

@@ -285,7 +285,18 @@ function createMockPlatform({ root, seed = true } = {}) {
         log({ op: 'chromeInstall' });
         return { phase: 'done', version: c.version };
       },
-      async openHelpViaOmnibox(exe) { log({ op: 'omnibox', exe }); return true; },
+      async openHelpViaOmnibox(exe) { log({ op: 'omnibox', exe, url: 'chrome://settings/help' }); return true; },
+      async openUrlViaOmnibox(exe, url) {
+        log({ op: 'omnibox', exe, url });
+        if (state.omniboxFails) return false;
+        // 실제 크롬처럼: 다시 시작하면 받아 둔 새 버전으로 바뀐다
+        if (url === 'chrome://restart') {
+          try { fs.unlinkSync(path.join(path.dirname(exe), 'new_chrome.exe')); } catch { /* none */ }
+          const v = (state.chromeUpdate || {}).installedVersion;
+          if (v) { reg.write('HKCU\\Software\\Google\\Chrome\\BLBeacon', 'version', REG.SZ, v); state.fileVersions[exe] = v; save(); }
+        }
+        return true;
+      },
     },
     network: {
       async adapters() { return JSON.parse(JSON.stringify(state.network.adapters)); },
