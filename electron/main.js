@@ -60,7 +60,8 @@ function createWindow() {
   });
   win.once('ready-to-show', () => win.show());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file://')) e.preventDefault(); });
+  // 파일을 창에 끌어다 놓아도 그 파일로 화면이 바뀌지 않게(쎈Clean 화면 주소만 허용)
+  win.webContents.on('will-navigate', (e, url) => { if (url !== win.webContents.getURL()) e.preventDefault(); });
   win.loadFile(RENDERER);
 }
 
@@ -91,6 +92,25 @@ app.whenReady().then(() => {
     if (r.canceled || !r.filePath) return { ok: false, canceled: true };
     fs.writeFileSync(r.filePath, services.network.exportCsv(), 'utf8');
     return { ok: true, path: r.filePath };
+  };
+  // 교사: IP·사양을 파일(.txt)로 저장해 정보부장에게 보내기
+  channels['network:saveFile'] = async (room) => {
+    const f = await services.network.messageFile(room);
+    const r = await dialog.showSaveDialog(win, { title: '정보부장에게 보낼 파일 저장', defaultPath: path.join(platform.paths.desktop, f.fileName), filters: [{ name: '텍스트 파일', extensions: ['txt'] }] });
+    if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+    fs.writeFileSync(r.filePath, f.content, 'utf8');
+    return { ok: true, path: r.filePath, name: path.basename(r.filePath) };
+  };
+  // 정보부장: 받은 파일 여러 개를 한꺼번에(파일 고르기 창)
+  const readText = (file) => {
+    const buf = fs.readFileSync(file);
+    try { return new TextDecoder('utf-8', { fatal: true }).decode(buf).replace(/^\ufeff/, ''); } catch { return new TextDecoder('euc-kr').decode(buf); }
+  };
+  channels['registry:importFiles'] = async () => {
+    const r = await dialog.showOpenDialog(win, { title: '선생님들이 보낸 IP 정보 파일 고르기(여러 개 가능)', properties: ['openFile', 'multiSelections'], filters: [{ name: '텍스트 파일', extensions: ['txt'] }] });
+    if (r.canceled || !r.filePaths.length) return { ok: false, canceled: true };
+    const files = r.filePaths.slice(0, 500).map((p) => { try { return fs.statSync(p).size > 256 * 1024 ? { name: path.basename(p), text: '' } : { name: path.basename(p), text: readText(p) }; } catch { return { name: path.basename(p), text: '' }; } });
+    return services.network.registryImportMany(files);
   };
   channels['registry:importCsv'] = async () => {
     const r = await dialog.showOpenDialog(win, { title: '교실 IP 목록 가져오기', properties: ['openFile'], filters: [{ name: 'CSV(엑셀)', extensions: ['csv'] }] });

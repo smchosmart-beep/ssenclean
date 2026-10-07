@@ -1,4 +1,4 @@
-import { h, btn, api, statusRow, pendingRow, hero, setHeaderActions, toast } from '../ui.js';
+import { h, btn, api, onEvent, statusRow, pendingRow, hero, setHeaderActions, toast } from '../ui.js';
 
 const ICON = { privacy: 'file', fonts: 'font', password: 'lock', screensaver: 'monitor', updates: 'up', cdrive: 'disk', browser: 'globe', desktop: 'folder', network: 'network' };
 const NAME = { privacy: '개인정보 파일', fonts: '폰트', password: 'PC암호', screensaver: '화면보호기', updates: '업데이트', cdrive: 'C드라이브', browser: '브라우저', desktop: '바탕화면', network: 'IP 주소' };
@@ -122,5 +122,18 @@ export default async function dashboard(ctx) {
   }
 
   runAll();
-  return () => { alive = false; timers.forEach(clearTimeout); };
+  // 크롬 업데이트가 진행 중이면 진행률을 카드에 반영하고, 끝나면 업데이트 카드만 다시 확인
+  let lastPct = -1;
+  const off = onEvent('updates:progress', (ev) => {
+    if (!alive || ev.id !== 'chrome') return;
+    if (ev.final) { check('updates', round); return; }
+    const c = cards.get('updates');
+    if (c && /업데이트 중이에요/.test(c.title) && ev.percent != null && ev.percent !== lastPct) {
+      lastPct = ev.percent;
+      const text = { downloading: '내려받는 중', installing: '설치하는 중' }[ev.phase] || '진행 중';
+      cards.set('updates', { ...c, desc: `${text} ${ev.percent}% · 끝나면 이 카드가 바뀌어요` });
+      render();
+    }
+  });
+  return () => { alive = false; timers.forEach(clearTimeout); if (off) off(); };
 }

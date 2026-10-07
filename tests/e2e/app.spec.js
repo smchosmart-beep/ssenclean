@@ -250,6 +250,14 @@ test('바탕화면 정리: 미리보기 → 정리 → 되돌리기', async () =
 
 test('브라우저 청소: 광고 치료 → 기록 지우기', async () => {
   await win.getByTestId('nav-browser').click();
+  // 기본 브라우저: 크롬 설정 창 열기 → 사용자가 바꾸면 표시가 저절로 바뀜
+  await expect(win.getByTestId('default-browser')).toContainText('기본 브라우저: 엣지');
+  await shot('07a-browser-default');
+  await win.getByTestId('make-chrome-default').click();
+  await expect(win.getByTestId('default-browser')).toContainText('[기본값으로 설정]');
+  await expect.poll(async () => (await mockLog()).some((l) => l.op === 'openExternal' && l.url === 'ms-settings:defaultapps?registeredAppMachine=Google%20Chrome')).toBeTruthy();
+  await app.evaluate(() => { const p = global.__sen.platform; p.reg.write('HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice', 'ProgId', p.REG.SZ, 'ChromeHTML'); });
+  await expect(win.getByTestId('default-browser')).toContainText('기본 브라우저: 크롬', { timeout: 6000 });
   await expect(win.getByTestId('ad-item').first()).toBeVisible({ timeout: 20000 });
   await shot('07-browser');
   await win.getByTestId('ad-fix').click();
@@ -278,6 +286,17 @@ test('IP 주소: 교사 - 내 IP 복사 → 받은 메시지 붙여넣기 → �
   await expect(win.getByTestId('net-hw')).toContainText('Intel Core i5-12400');
   await expect(win.getByTestId('net-hw')).toContainText('Samsung M2020 Series');
   await win.getByTestId('net-room').fill('3학년 2반');
+  // 우리 교실 이름은 입력만 해도 저장(다른 메뉴에 갔다 와도 남음)
+  await win.waitForTimeout(600);
+  await win.getByTestId('nav-dashboard').click();
+  await win.getByTestId('nav-network').click();
+  await expect(win.getByTestId('net-room')).toHaveValue('3학년 2반');
+  // 파일로 저장
+  const ipFile = path.join(root, 'ip-file.txt');
+  await app.evaluate(({ dialog }, p) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: p }); }, ipFile);
+  await win.getByTestId('net-save-file').click();
+  await expect(win.locator('.toast').last()).toContainText('파일을 저장했어요');
+  expect(fs.readFileSync(ipFile, 'utf8')).toContain('[쎈Clean IP 정보] 3학년 2반\r\n');
   await win.getByTestId('net-copy').click();
   await expect.poll(() => app.evaluate(() => global.__sen.platform._state().clipboard)).toContain('[쎈Clean IP 정보] 3학년 2반');
   await expect.poll(() => app.evaluate(() => global.__sen.platform._state().clipboard)).toContain('RAM 16GB');
@@ -317,6 +336,24 @@ test('IP 주소: 정보부장 - 받은 내용 저장 → 교실 목록 → IP �
   await win.getByTestId('reg-paste-save').click();
   await app.evaluate(() => { global.__sen.platform.clipboard.write('[쎈클린 IP 정보] 3학년 1반\nPC이름 SM-3-1\nIP 10.20.3.41 / 서브넷 255.255.255.0 / 게이트웨이 10.20.3.1\nMAC AA-BB-CC-DD-EE-01'); });
   await win.getByTestId('reg-paste-save').click();
+  await expect(win.getByTestId('reg-item')).toHaveCount(2);
+  // 여러 선생님이 보낸 파일을 한꺼번에 끌어다 놓기(1대는 새로, 1대는 이미 있는 PC 갱신, 1개는 다른 파일)
+  const fileText = fs.readFileSync(path.join(root, 'ip-file.txt'), 'utf8');
+  await win.getByTestId('reg-drop').evaluate((el, t) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([t], '쎈Clean IP정보_3학년 2반.txt', { type: 'text/plain' }));
+    dt.items.add(new File([t.replace('3학년 2반', '4학년 3반').replace('00-1A-2B-3C-4D-5E', '11-22-33-44-55-66').replace('10.20.3.42', '10.20.4.30')], '4-3.txt', { type: 'text/plain' }));
+    dt.items.add(new File(['회의록'], '회의록.txt', { type: 'text/plain' }));
+    el.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+  }, fileText);
+  await expect(win.locator('.modal h2').last()).toContainText('새로 1대, 고친 것 1대를 대장에 적었어요');
+  await expect(win.locator('.modal').last()).toContainText('회의록.txt - 쎈Clean IP 정보 파일이 아니에요');
+  await shot('11b-registry-drop');
+  await win.getByTestId('confirm-ok').click();
+  await expect(win.getByTestId('reg-item')).toHaveCount(3);
+  await win.getByTestId('reg-item').filter({ hasText: '4학년 3반' }).getByTestId('reg-edit').click();
+  await win.locator('.modal button', { hasText: '목록에서 빼기' }).click();
+  await win.getByTestId('confirm-ok').click();
   await expect(win.getByTestId('reg-item')).toHaveCount(2);
   const row2 = win.getByTestId('reg-item').filter({ hasText: '3학년 2반' });
   await expect(row2.locator('td[data-col=cpu]')).toContainText('Intel Core i5-12400');

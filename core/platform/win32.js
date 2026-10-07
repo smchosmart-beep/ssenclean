@@ -152,6 +152,7 @@ ConvertTo-Json -InputObject @($r) -Depth 5 -Compress`, { timeoutMs: 45000 });
 
   return {
     kind: 'win32',
+    osBuild: Number(String(os.release()).split('.')[2]) || 0,
     paths,
     user,
     REG: native.REG,

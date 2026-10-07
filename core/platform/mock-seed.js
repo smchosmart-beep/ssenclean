@@ -182,6 +182,7 @@ function seedMock(root, P) {
       { name: 'GoogleUpdateTaskUserS-1-5-21', path: '\\', user: 'teacher', state: 'Ready', author: 'Google LLC', actions: [{ exec: path.join(P.localAppData, 'Google', 'Update', 'GoogleUpdate.exe'), args: '/c' }] },
     ],
     registry: {
+      'HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice': { ProgId: { type: REG.SZ, value: 'MSEdgeHTM' } },
       'HKCU\\Control Panel\\Desktop': {
         ScreenSaveActive: { type: REG.SZ, value: '0' },
         ScreenSaveTimeOut: { type: REG.SZ, value: '900' },

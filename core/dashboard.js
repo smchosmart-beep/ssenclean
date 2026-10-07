@@ -41,6 +41,13 @@ function createDashboard(s) {
     },
     async updates() {
       const list = await s.updates.check();
+      // 쎈Clean 안에서 업데이트하는 중이면 '최신'으로 보이면 안 된다
+      const busy = list.find((u) => u.state === 'updating');
+      if (busy) {
+        const p = busy.progress || {};
+        const text = { downloading: '내려받는 중', installing: '설치하는 중', preparing: '설치를 준비하는 중', checking: '확인하는 중', available: '내려받을 준비 중' }[p.phase] || '진행 중';
+        return card('updates', 'info', `${busy.name} 업데이트 중이에요`, `${text}${p.percent != null ? ` ${p.percent}%` : ''} · 끝나면 이 카드가 바뀌어요`, { kind: 'navigate', target: 'updates', label: '진행 보기', icon: 'search' });
+      }
       const restart = list.find((u) => u.state === 'restart');
       if (restart && list.filter((u) => u.state === 'outdated').length === 0) {
         return card('updates', 'warn', 'PC를 다시 켜면 크롬 업데이트가 적용돼요', '새 버전을 받아 두었어요.', { kind: 'navigate', target: 'updates', label: '자세히', icon: 'search' });

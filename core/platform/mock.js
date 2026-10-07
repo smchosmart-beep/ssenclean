@@ -159,6 +159,7 @@ function createMockPlatform({ root, seed = true } = {}) {
 
   return {
     kind: 'mock',
+    osBuild: 22631,
     root,
     paths,
     user: { name: 'teacher', domain: 'SCHOOL-PC', computer: 'SCHOOL-PC' },

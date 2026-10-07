@@ -94,13 +94,33 @@ function createNetworkService({ platform, store }) {
     store.write(SNAPSHOT, { ...snap, at: Date.now(), primary: i.primary, adapters: i.adapters, pcName: i.pcName, conn: conn || null });
   }
 
-  async function myMessage(room) {
-    if (typeof room === 'string') store.settings.set({ room: room.trim() });
+  // 우리 교실 이름은 입력하는 대로 저장(다른 메뉴에 갔다 와도 남게)
+  function setRoom(room) {
+    store.settings.set({ room: String(room || '').trim().slice(0, 40) });
+    return { ok: true };
+  }
+
+  async function buildMessage(room) {
+    if (typeof room === 'string') setRoom(room);
     let snap = store.read(SNAPSHOT, null);
     if (!snap) { await load(); snap = store.read(SNAPSHOT, null); }
-    const msg = M.teacherMessage({ ...(snap.primary || {}), pcName: snap.pcName }, store.settings.get().room || '', snap.hardware);
-    platform.clipboard.write(msg);
-    return msg;
+    if (snap.hardware) snap.hardware = normalizeHw(snap.hardware);
+    return { text: M.teacherMessage({ ...(snap.primary || {}), pcName: snap.pcName }, store.settings.get().room || '', snap.hardware), pcName: snap.pcName || '' };
+  }
+
+  async function myMessage(room) {
+    const { text } = await buildMessage(room);
+    platform.clipboard.write(text);
+    return text;
+  }
+
+  // 파일로 보내기: 메시지와 같은 내용을 .txt로(메모장으로도 열림). 이름에 교실·PC 이름을 넣어 정보부장이 알아보기 쉽게.
+  async function messageFile(room) {
+    const { text, pcName } = await buildMessage(room);
+    const r = store.settings.get().room || '교실';
+    const safe = (x) => String(x || '').replace(/[\\/:*?"<>|\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40);
+    const fileName = `쎈Clean IP정보_${safe(r)}${pcName ? `_${safe(pcName)}` : ''}.txt`;
+    return { fileName, content: '\ufeff' + text.replace(/\n/g, '\r\n') + '\r\n' };
   }
 
   function registryData() {
@@ -224,6 +244,27 @@ function createNetworkService({ platform, store }) {
     return { ok: true, created, record: pc, duplicates: duplicatesOf(r, pc.ip, pc.id) };
   }
 
+  // 여러 선생님이 보낸 파일을 한꺼번에: [{ name, text }] → 파일마다 저장 결과
+  function registryImportMany(files) {
+    const list = (Array.isArray(files) ? files : []).slice(0, 500);
+    const results = [];
+    for (const f of list) {
+      const name = String((f && f.name) || '').slice(0, 200);
+      const text = String((f && f.text) || '');
+      if (text.length > 256 * 1024 || !/\[쎈(?:클린|Clean) IP 정보\]/.test(text)) { results.push({ name, ok: false, code: 'not-ip-file' }); continue; }
+      const r = registryImport(text);
+      results.push(r.ok ? { name, ok: true, created: r.created, room: r.record.room || r.record.pcName || '', duplicate: r.duplicates.length > 0 } : { name, ok: false, code: r.code });
+    }
+    return {
+      ok: results.some((x) => x.ok),
+      created: results.filter((x) => x.ok && x.created).length,
+      updated: results.filter((x) => x.ok && !x.created).length,
+      failed: results.filter((x) => !x.ok),
+      duplicates: results.filter((x) => x.ok && x.duplicate).map((x) => x.room),
+      results,
+    };
+  }
+
   function registryUpdate(id, patch) {
     const r = registryData();
     const pc = r.pcs.find((x) => x.id === id);
@@ -319,8 +360,8 @@ function createNetworkService({ platform, store }) {
   }
 
   return {
-    info, load, last, myMessage, parse, apply, undo, check,
-    registryList, registryImport, registryUpdate, registryDelete, setDefaults, setColumns, assign, exportCsv, importCsv,
+    info, load, last, setRoom, myMessage, messageFile, parse, apply, undo, check,
+    registryList, registryImport, registryImportMany, registryUpdate, registryDelete, setDefaults, setColumns, assign, exportCsv, importCsv,
   };
 }
 

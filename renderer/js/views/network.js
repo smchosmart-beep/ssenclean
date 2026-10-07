@@ -65,6 +65,10 @@ export default async function networkView(ctx) {
 
     // 정보부장에게 알려주기
     const room = input(info.room, { inputmode: 'text', placeholder: '예: 3학년 2반', 'data-testid': 'net-room', style: { maxWidth: '240px' } });
+    let roomTimer = null;
+    const saveRoom = () => { clearTimeout(roomTimer); last.room = room.value.trim(); return api('network:setRoom', room.value); };
+    room.addEventListener('input', () => { clearTimeout(roomTimer); roomTimer = setTimeout(saveRoom, 400); });
+    room.addEventListener('change', saveRoom);
     const kv = h('dl', { class: 'kv', style: { gridTemplateColumns: '130px 1fr' } },
       ...[['PC 이름', info.pcName], ['IP 주소', p.ip], ['서브넷 마스크', p.mask], ['기본 게이트웨이', p.gateway || '-'], ['DNS 서버', p.dns.join(', ') || '-'], ['MAC 주소', p.mac], ['방식', p.dhcp ? '자동(DHCP)' : '고정 IP']]
         .flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)]));
@@ -80,7 +84,12 @@ export default async function networkView(ctx) {
       h('div', { class: 'section-title', style: { margin: '20px 0 10px', fontSize: '15px' } }, 'PC 사양'),
       hw ? hwKv : h('div', { class: 'muted small' }, 'PC 사양을 읽지 못했어요. [다시 불러오기]를 눌러 보세요.'),
       h('div', { class: 'btn-row', style: { marginTop: '18px' } },
-        btn('copy', '정보부장에게 보낼 내용 복사', async () => { await api('network:myMessage', room.value); toast('복사했어요. 메신저에 붙여넣어 정보부장에게 보내세요'); }, { variant: 'primary', testid: 'net-copy' })));
+        btn('copy', '정보부장에게 보낼 내용 복사', async () => { await api('network:myMessage', room.value); toast('복사했어요. 메신저에 붙여넣어 정보부장에게 보내세요'); }, { variant: 'primary', testid: 'net-copy' }),
+        btn('download', '파일로 저장', async () => {
+          const r = await api('network:saveFile', room.value);
+          if (r.ok) toast(`'${r.name}' 파일을 저장했어요. 메신저에 첨부해 정보부장에게 보내세요`);
+        }, { testid: 'net-save-file' })),
+      h('div', { class: 'muted small', style: { marginTop: '8px' } }, '메시지로 보내기 어려우면 [파일로 저장]한 파일을 메신저에 첨부해 보내세요. 정보부장은 여러 선생님의 파일을 한꺼번에 끌어다 넣을 수 있어요.'));
 
     // IP 바꾸기
     if (!form) form = { dhcp: p.dhcp, ip: p.ip, mask: p.mask, gateway: p.gateway, dns1: p.dns[0] || '', dns2: p.dns[1] || '' };
@@ -230,8 +239,43 @@ export default async function networkView(ctx) {
       if (r.duplicates.length) toast(`저장했어요. ⚠ 같은 IP를 ${r.duplicates.map((d) => d.room || d.pcName).join(', ')}도 쓰고 있어요`);
       else toast(`${r.record.room || r.record.pcName || 'PC'}을(를) ${r.created ? '저장' : '갱신'}했어요`);
     };
+    // 여러 선생님이 보낸 파일(.txt)을 한꺼번에: 끌어다 놓기 또는 [파일 불러오기]
+    const showMany = async (r) => {
+      if (r.canceled) return;
+      await loadRegistry();
+      const parts = [];
+      if (r.created) parts.push(`새로 ${r.created}대`);
+      if (r.updated) parts.push(`고친 것 ${r.updated}대`);
+      const head = parts.length ? `${parts.join(', ')}를 대장에 적었어요` : '대장에 적은 PC가 없어요';
+      if (!r.failed.length && !r.duplicates.length) { toast(head); return; }
+      await confirmDialog({
+        title: head,
+        body: h('div', {},
+          r.failed.length ? h('div', {}, h('strong', {}, `읽지 못한 파일 ${r.failed.length}개`), h('div', { class: 'msgbox', style: { marginTop: '6px' } }, r.failed.map((f) => `${f.name} - ${f.code === 'not-ip-file' ? '쎈Clean IP 정보 파일이 아니에요' : 'IP·MAC 주소를 찾지 못했어요'}`).join('\n'))) : null,
+          r.duplicates.length ? h('div', { class: 'warnline', style: { marginTop: '10px' } }, `⚠ 같은 IP를 쓰는 PC가 있어요: ${[...new Set(r.duplicates)].join(', ')}`) : null),
+        okLabel: '알겠어요', cancelLabel: '닫기',
+      });
+    };
+    const readDropped = async (fileList) => {
+      const all = [...fileList];
+      const files = all.filter((f) => /\.txt$/i.test(f.name)).slice(0, 500);
+      if (!files.length) { toast('.txt 파일만 넣을 수 있어요'); return; }
+      const texts = await Promise.all(files.map(async (f) => ({ name: f.name, text: f.size > 256 * 1024 ? '' : (await f.text()).replace(/^\ufeff/, '') })));
+      const r = await api('registry:importTexts', texts);
+      if (all.length > files.length) r.failed.push(...all.filter((f) => !/\.txt$/i.test(f.name)).map((f) => ({ name: f.name, code: 'not-ip-file' })));
+      showMany(r);
+    };
+    const drop = h('div', { class: 'dropzone', 'data-testid': 'reg-drop' },
+      h('div', { class: 'ic tone-ok' }, icon('folder')),
+      h('div', { style: { flex: '1' } }, h('strong', {}, '받은 파일을 여기에 끌어다 놓으세요'), h('div', { class: 'muted small' }, '여러 선생님이 보낸 IP 정보 파일(.txt)을 모두 선택해 한꺼번에 놓으면 대장에 적혀요.')),
+      btn('folder', '파일 불러오기', async () => showMany(await api('registry:importFiles')), { testid: 'reg-files' }));
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer && e.dataTransfer.files.length) readDropped(e.dataTransfer.files); });
     const receive = h('section', { class: 'panel pad' },
       h('div', { class: 'section-title' }, '교사에게 받은 내용 저장'),
+      drop,
+      h('div', { class: 'muted small', style: { margin: '14px 0 6px' } }, '메시지로 받았으면 아래에 붙여넣으세요.'),
       recv,
       h('div', { class: 'btn-row', style: { marginTop: '10px' } },
         btn('paste', '붙여넣고 저장', async () => { const t = await api('app:paste'); await save(t); }, { variant: 'primary', testid: 'reg-paste-save' }),

@@ -1,4 +1,8 @@
 import { h, btn, api, setHeaderActions } from './ui.js';
+
+// 파일을 놓을 수 있는 곳(대장 등)이 아닌 데서 놓으면 아무 일도 하지 않게
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => e.preventDefault());
 import dashboard from './views/dashboard.js';
 import privacy from './views/privacy.js';
 import fonts from './views/fonts.js';

@@ -278,3 +278,5 @@ textarea.field { width: 100%; }
 .reg-table .btn { -webkit-text-stroke: .4px currentColor; }
 .reg-table th.dragging { opacity: .5; }
 .reg-table th { touch-action: none; }
+.dropzone { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border: 2px dashed var(--btn-line); border-radius: var(--r-md); background: var(--canvas); }
+.dropzone.over { border-color: var(--primary); background: var(--mint); }

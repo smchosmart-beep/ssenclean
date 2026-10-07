@@ -477,7 +477,31 @@ function createBrowserService({ platform, store, dataDir }) {
     return { ok: true, freed };
   }
 
-  return { scan, quickCount, fix, undo: undoFix, openReset, runningBrowsers, closeBrowsers, historySizes, cleanHistory };
+  // ── 기본 브라우저 ──
+  // Windows는 다른 프로그램이 기본 브라우저를 몰래 바꾸지 못하게 막아 두었다(사용자 선택 보호).
+  // 그래서 크롬의 '기본 앱' 설정 창을 바로 열고, 사용자가 [기본값으로 설정]을 한 번 누르게 한다.
+  const UA = 'HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https';
+  const PROG = [[/^ChromeHTML/i, 'chrome', '크롬'], [/^MSEdgeHTM/i, 'edge', '엣지'], [/^(WhaleHTML|NaverWhale)/i, 'whale', '웨일'], [/^FirefoxURL/i, 'firefox', '파이어폭스'], [/^IE\.HTTP/i, 'ie', '인터넷 익스플로러']];
+  function defaultBrowser() {
+    const rd = (k) => { try { const v = platform.reg.read(k, 'ProgId'); return v && v.value ? String(v.value) : ''; } catch { return ''; } };
+    const progId = rd(`${UA}\\UserChoiceLatest`) || rd(`${UA}\\UserChoice`);
+    const m = PROG.find(([re]) => re.test(progId));
+    return { progId, id: m ? m[1] : (progId ? 'other' : 'unknown'), name: m ? m[2] : (progId ? '다른 브라우저' : '알 수 없음'), isChrome: !!m && m[1] === 'chrome', chromeInstalled: !!findBrowserExe('chrome.exe') };
+  }
+  async function makeChromeDefault() {
+    const st = defaultBrowser();
+    if (st.isChrome) return { ok: true, already: true };
+    const exe = findBrowserExe('chrome.exe');
+    if (!exe) return { ok: false, code: 'no-chrome' };
+    const build = Number(platform.osBuild) || 0;
+    const perUser = lc(exe).startsWith(lc(P.localAppData));
+    // Windows 11: 크롬 설정 화면으로 바로(맨 위 [기본값으로 설정] 한 번), Windows 10: 기본 앱 화면
+    const url = build >= 22000 ? `ms-settings:defaultapps?${perUser ? 'registeredAppUser' : 'registeredAppMachine'}=Google%20Chrome` : 'ms-settings:defaultapps';
+    await platform.shell.openExternal(url);
+    return { ok: true, opened: true, win11: build >= 22000 };
+  }
+
+  return { defaultBrowser, makeChromeDefault, scan, quickCount, fix, undo: undoFix, openReset, runningBrowsers, closeBrowsers, historySizes, cleanHistory };
 }
 
 module.exports = { createBrowserService, exeFromCommand };

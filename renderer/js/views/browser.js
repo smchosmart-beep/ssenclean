@@ -8,7 +8,45 @@ export default async function browserView(ctx) {
   const selected = new Set();
   const box = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '14px' } });
   const tabsEl = h('div', { class: 'tabs' });
-  ctx.main.append(pageHead('브라우저 청소', '광고창·광고 팝업·쇼핑 아이콘의 원인을 찾아 없애고, 방문 기록을 지워요.', tabsEl), box);
+  const defBox = h('div', {});
+  ctx.main.append(pageHead('브라우저 청소', '광고창·광고 팝업·쇼핑 아이콘의 원인을 찾아 없애고, 방문 기록을 지워요.', tabsEl), defBox, box);
+
+  // ── 기본 브라우저: 크롬으로 ──
+  let alive = true;
+  let pollTimer = null;
+  let waiting = null; // 설정 창을 연 뒤 안내 { win11 }
+  async function drawDefault() {
+    const st = await api('browser:defaultBrowser');
+    if (!alive) return;
+    if (st.isChrome) {
+      if (waiting) { waiting = null; toast('크롬이 기본 브라우저가 됐어요'); }
+      defBox.replaceChildren(h('section', { class: 'panel pad tone-ok', 'data-testid': 'default-browser', style: { display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 24px' } },
+        h('div', { class: 'ic' }, icon('checkCircle')), h('div', { style: { flex: '1' } }, h('strong', {}, '기본 브라우저: 크롬'), h('span', { class: 'muted small' }, '  · 링크를 누르면 크롬으로 열려요'))));
+      return;
+    }
+    const guide = waiting
+      ? (waiting.win11 ? 'Windows 설정 창이 열렸어요. 맨 위의 [기본값으로 설정]을 한 번 누르세요. 바뀌면 여기 표시가 저절로 바뀌어요.' : "Windows 설정 창이 열렸어요. '웹 브라우저' 아래 지금 브라우저를 누르고 'Google Chrome'을 고르세요.")
+      : `${st.id === 'unknown' ? '지금 기본 브라우저를 확인하지 못했어요' : `지금 기본 브라우저는 ${st.name}${(st.name.charCodeAt(st.name.length - 1) - 0xAC00) % 28 ? '이에요' : '예요'}`}. 링크·바로가기를 크롬으로 열려면 크롬을 기본 브라우저로 정하세요.`;
+    defBox.replaceChildren(h('section', { class: `panel pad tone-${waiting ? 'info' : 'warn'}`, 'data-testid': 'default-browser', style: { display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 24px' } },
+      h('div', { class: 'ic' }, icon('globe')),
+      h('div', { style: { flex: '1' } }, h('strong', { style: { display: 'block' } }, st.chromeInstalled ? `기본 브라우저: ${st.name}` : '크롬이 설치되어 있지 않아요'), h('span', { class: 'muted small' }, st.chromeInstalled ? guide : '크롬을 설치한 뒤 다시 확인해 주세요.')),
+      st.chromeInstalled ? btn('globe', waiting ? '설정 창 다시 열기' : '크롬을 기본 브라우저로', async () => {
+        const r = await api('browser:makeChromeDefault');
+        if (r.already) { drawDefault(); return; }
+        if (!r.ok) { toast('크롬을 찾지 못했어요'); return; }
+        waiting = { win11: r.win11 };
+        drawDefault();
+        // 사용자가 설정 창에서 고를 때까지 2분 동안 확인
+        clearInterval(pollTimer);
+        let n = 0;
+        pollTimer = setInterval(async () => {
+          n++;
+          const now = await api('browser:defaultBrowser');
+          if (!alive || now.isChrome || n > 80) { clearInterval(pollTimer); if (alive) drawDefault(); }
+        }, 1500);
+      }, { variant: waiting ? '' : 'primary', testid: 'make-chrome-default' }) : null));
+  }
+  drawDefault();
 
   function renderTabs() {
     tabsEl.replaceChildren(
@@ -139,4 +177,5 @@ export default async function browserView(ctx) {
   function show() { if (tab === 'ads') { if (scan) renderAds(); else runScan(); } else renderHistory(); }
   renderTabs();
   show();
+  return () => { alive = false; clearInterval(pollTimer); };
 }
