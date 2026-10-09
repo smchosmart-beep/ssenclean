@@ -75,8 +75,9 @@ export default async function filenamesView(ctx) {
       h('div', { class: 'tx' },
         h('strong', { 'data-testid': 'fn-new' }, i.newName),
         h('span', { style: { textDecoration: 'line-through', opacity: '.75' }, 'data-testid': 'fn-old' }, i.name),
-        h('span', { class: 'muted small' }, i.dir)),
-      h('div', { class: 'counts', style: { flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '260px' } }, i.reasons.map((r) => h('span', { class: `tag tone-${TAG_TONE[r] || 'info'}` }, r))));
+        h('button', { type: 'button', class: 'linkish muted small', title: '이 파일이 있는 폴더 열기', onclick: () => api('filenames:reveal', i.path), 'data-testid': 'fn-dir' }, icon('folder'), i.dir)),
+      h('div', { class: 'counts', style: { flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '260px' } }, i.reasons.map((r) => h('span', { class: `tag tone-${TAG_TONE[r] || 'info'}` }, r))),
+      btn('search', '위치', () => api('filenames:reveal', i.path), { title: '파일이 있는 폴더를 열고 이 파일을 표시해요', testid: 'fn-reveal' }));
   }
 
   function renderFooter() {

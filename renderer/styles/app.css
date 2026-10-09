@@ -283,3 +283,6 @@ textarea.field { width: 100%; }
 .row .btn.auto { width: auto; min-width: 140px; }
 .row-slot > .row { border-bottom: 1px solid var(--hairline); }
 .row-slot:last-child > .row { border-bottom: 0; }
+.item .tx .linkish.muted { color: var(--ink-mute); font-size: 14px; margin-top: 2px; align-self: flex-start; text-align: left; }
+.item .tx .linkish.muted:hover { color: var(--brand); text-decoration: underline; }
+.item .tx .linkish.muted svg { width: 15px; height: 15px; }

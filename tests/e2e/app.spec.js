@@ -437,6 +437,12 @@ test('파일명 정리: 깨진 이름 찾기 → 한 번에 정리 → 되돌리
   await expect(win.getByTestId('fn-check-list')).toContainText('용석.hwp'); // 확인 필요(체크 해제)
   await expect(win.getByTestId('fn-check-list').getByTestId('fn-check')).not.toBeChecked();
   await shot('15-filenames');
+  await win.getByTestId('fn-list').getByTestId('fn-item').nth(1).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await shot('15b-filenames-list');
+  // 고칠 이름이 있는 폴더로 바로 이동(파일 표시)
+  await win.getByTestId('fn-list').getByTestId('fn-reveal').first().click();
+  await expect.poll(async () => (await mockLog()).some((l) => l.op === 'reveal' && l.path.startsWith(dl))).toBeTruthy();
+  await win.getByTestId('fn-list').getByTestId('fn-dir').first().click();
   await win.getByTestId('fn-clean-top').click();
   await expect(win.locator('.hero h1')).toContainText('정리했어요');
   expect(fs.existsSync(path.join(dl, '용석핑.hwp'))).toBeTruthy();
