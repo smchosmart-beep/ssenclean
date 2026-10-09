@@ -73,6 +73,10 @@ app.whenReady().then(() => {
   if (platform.kind === 'mock') app.setPath('userData', platform.paths.userData);
   const { services, channels } = createServices({ platform, spawnScan, emit });
 
+  channels['filenames:pickFolder'] = async () => {
+    const r = await dialog.showOpenDialog(win, { title: '파일명을 정리할 폴더 고르기', properties: ['openDirectory', 'multiSelections'] });
+    return r.canceled || !r.filePaths.length ? null : r.filePaths;
+  };
   channels['privacy:pickFolder'] = async () => {
     const r = await dialog.showOpenDialog(win, { title: '검사할 폴더 고르기', properties: ['openDirectory'] });
     return r.canceled || !r.filePaths.length ? null : r.filePaths[0];

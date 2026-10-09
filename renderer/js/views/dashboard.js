@@ -1,7 +1,7 @@
 import { h, btn, api, onEvent, statusRow, pendingRow, hero, setHeaderActions, toast } from '../ui.js';
 
-const ICON = { privacy: 'file', fonts: 'font', password: 'lock', screensaver: 'monitor', updates: 'up', cdrive: 'disk', browser: 'globe', desktop: 'folder', network: 'network' };
-const NAME = { privacy: '개인정보 파일', fonts: '폰트', password: 'PC암호', screensaver: '화면보호기', updates: '업데이트', cdrive: 'C드라이브', browser: '브라우저', desktop: '바탕화면', network: 'IP 주소' };
+const ICON = { privacy: 'file', fonts: 'font', password: 'lock', screensaver: 'monitor', updates: 'up', cdrive: 'disk', browser: 'globe', desktop: 'folder', filenames: 'rename', network: 'network' };
+const NAME = { privacy: '개인정보 파일', fonts: '폰트', password: 'PC암호', screensaver: '화면보호기', updates: '업데이트', cdrive: 'C드라이브', browser: '브라우저', desktop: '바탕화면', filenames: '파일명', network: 'IP 주소' };
 const PENDING_DESC = {
   privacy: '지난 검사 결과를 읽고 있어요',
   fonts: '설치된 폰트를 살펴보고 있어요',
@@ -11,6 +11,7 @@ const PENDING_DESC = {
   cdrive: 'C드라이브 남은 공간을 확인하고 있어요',
   browser: '바로가기와 시작 프로그램에서 광고 흔적을 찾고 있어요',
   desktop: '바탕화면 파일을 세고 있어요',
+  filenames: '바탕화면·다운로드 파일 이름을 살펴보고 있어요',
   network: '네트워크와 인터넷 연결을 확인하고 있어요',
 };
 const SLOW_MS = 20000;

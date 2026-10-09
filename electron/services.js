@@ -9,6 +9,7 @@ const { createScreensaverService } = require('../core/screensaver');
 const { createUpdateService } = require('../core/updates');
 const { createUninstallService } = require('../core/uninstall');
 const { createDesktopService } = require('../core/desktop');
+const { createFilenameService } = require('../core/filenames');
 const { createBrowserService } = require('../core/browser');
 const { createDashboard } = require('../core/dashboard');
 const { createNetworkService } = require('../core/network');
@@ -40,6 +41,7 @@ function createServices({ platform, spawnScan, emit }) {
     updates: createUpdateService({ platform, emit }),
     uninstall: createUninstallService({ platform }),
     desktop: createDesktopService({ platform, store, scanPrivacy }),
+    filenames: createFilenameService({ platform, store }),
     browser: createBrowserService({ platform, store, dataDir: path.join(ROOT, 'data') }),
     network: createNetworkService({ platform, store }),
     cdrive: createCdriveService({ platform, store, emit }),
@@ -117,6 +119,11 @@ function createServices({ platform, spawnScan, emit }) {
     'cdrive:openFolder': (letter) => s.cdrive.openFolder(letter),
     'cdrive:reveal': (p) => s.cdrive.reveal(p),
 
+    'filenames:scan': (o) => s.filenames.scan(o || {}),
+    'filenames:apply': (ids) => s.filenames.apply(Array.isArray(ids) ? ids : []),
+    'filenames:undo': (id) => s.filenames.undo(id),
+    'filenames:lastUndo': () => s.filenames.lastUndo(),
+    'filenames:reveal': (p) => s.filenames.openFolder(p),
     'desktop:status': () => s.desktop.quickStatus(),
     'desktop:plan': (o) => s.desktop.plan(o || {}, (p) => emit('desktop:progress', p)),
     'desktop:apply': (o) => s.desktop.apply(o || {}),

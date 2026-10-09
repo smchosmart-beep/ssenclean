@@ -34,14 +34,14 @@ const mockLog = () => app.evaluate(() => global.__sen.platform._log());
 test('대시보드: 메뉴 순서대로 고정, 점검 중 표시', async () => {
   await expect(win.getByTestId('dash-hero')).toContainText(/해결할 일이|점검하고 있어요/, { timeout: 20000 });
   const rows = win.getByTestId('dash-rows').locator('.row:not(.pending)');
-  await expect(rows).toHaveCount(9, { timeout: 30000 });
+  await expect(rows).toHaveCount(10, { timeout: 30000 });
   await expect(win.getByTestId('dash-rows').locator('.row.pending')).toHaveCount(0);
   await expect(win.getByTestId('recheck')).toHaveText('다시 점검');
   const ids = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
-  expect(ids).toEqual(['dash-privacy', 'dash-fonts', 'dash-password', 'dash-screensaver', 'dash-updates', 'dash-cdrive', 'dash-browser', 'dash-desktop', 'dash-network']);
+  expect(ids).toEqual(['dash-privacy', 'dash-fonts', 'dash-password', 'dash-screensaver', 'dash-updates', 'dash-cdrive', 'dash-browser', 'dash-desktop', 'dash-filenames', 'dash-network']);
   await expect(win.getByTestId('dash-network')).toContainText('아직 불러오지 않았어요');
   const nav = await win.locator('#nav .btn').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
-  expect(nav).toEqual(['nav-dashboard', 'nav-privacy', 'nav-fonts', 'nav-password', 'nav-screensaver', 'nav-updates', 'nav-cdrive', 'nav-browser', 'nav-desktop', 'nav-network']);
+  expect(nav).toEqual(['nav-dashboard', 'nav-privacy', 'nav-fonts', 'nav-password', 'nav-screensaver', 'nav-updates', 'nav-cdrive', 'nav-browser', 'nav-desktop', 'nav-filenames', 'nav-network']);
   await expect(win.getByTestId('dash-fonts')).toContainText('사용 주의 폰트 3개');
   await expect(win.getByTestId('dash-password')).toContainText('PC암호가 없어요');
   await expect(win.getByTestId('nav-password').locator('.dot')).toHaveClass(/danger/);
@@ -421,11 +421,48 @@ test('IP 주소: 정보부장 - 받은 내용 저장 → 교실 목록 → IP �
   await shot('11-network-registry');
 });
 
+test('파일명 정리: 깨진 이름 찾기 → 한 번에 정리 → 되돌리기, 위장 실행 파일 경고', async () => {
+  const dl = path.join(root, 'Users', 'teacher', 'Downloads', '맥에서 받은 자료');
+  fs.mkdirSync(dl, { recursive: true });
+  const moj = new TextDecoder('windows-1252').decode(Uint8Array.from([0xB0, 0xA1, 0xC1, 0xA4, 0xC5, 0xEB, 0xBD, 0xC5, 0xB9, 0xAE])); // '가정통신문'을 서양 글꼴로 읽은 이름
+  const names = ['용석핑.hwp'.normalize('NFD'), `${moj}.hwp`, '보고서.hwp.hwp', '★운동회 사진🎉.jpg', 'ㅇㅛㅇㅅㅓㄱ.hwp', '안내문.pdf.exe'];
+  for (const n of names) fs.writeFileSync(path.join(dl, n), 'x');
+  await win.getByTestId('nav-dashboard').click();
+  await expect(win.getByTestId('dash-filenames')).toContainText('위장한 실행 파일 1개', { timeout: 20000 });
+  await win.getByTestId('nav-filenames').click();
+  await expect(win.locator('.hero h1')).toContainText('깔끔하게 고칠 이름', { timeout: 15000 });
+  await expect(win.getByTestId('fn-warning')).toContainText('안내문.pdf.exe');
+  const news = await win.getByTestId('fn-list').getByTestId('fn-new').allTextContents();
+  for (const n of ['용석핑.hwp', '가정통신문.hwp', '보고서.hwp', '운동회 사진.jpg']) expect(news).toContain(n);
+  await expect(win.getByTestId('fn-check-list')).toContainText('용석.hwp'); // 확인 필요(체크 해제)
+  await expect(win.getByTestId('fn-check-list').getByTestId('fn-check')).not.toBeChecked();
+  await shot('15-filenames');
+  await win.getByTestId('fn-clean-top').click();
+  await expect(win.locator('.hero h1')).toContainText('정리했어요');
+  expect(fs.existsSync(path.join(dl, '용석핑.hwp'))).toBeTruthy();
+  expect(fs.existsSync(path.join(dl, '가정통신문.hwp'))).toBeTruthy();
+  expect(fs.existsSync(path.join(dl, '안내문.pdf.exe'))).toBeTruthy(); // 위장 파일은 이름 그대로
+  expect(fs.existsSync(path.join(dl, 'ㅇㅛㅇㅅㅓㄱ.hwp'))).toBeTruthy();
+  await win.getByTestId('fn-undo').click();
+  await expect(win.locator('.toast').last()).toContainText('원래 이름으로 되돌렸어요');
+  expect(fs.existsSync(path.join(dl, '용석핑.hwp'.normalize('NFD')))).toBeTruthy();
+  // 고른 폴더 + 이름 규칙(번호)
+  await app.evaluate(({ dialog }, p) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] }); }, dl);
+  await win.getByTestId('fn-pick').click();
+  await expect(win.getByTestId('fn-drop')).toContainText('맥에서 받은 자료');
+  await win.getByTestId('fn-rules-toggle').click();
+  await win.getByTestId('fn-rule-prefix').fill('2026_');
+  await win.getByTestId('fn-rule-prefix').dispatchEvent('change');
+  await win.getByTestId('fn-rules-apply').click();
+  await expect(win.getByTestId('fn-list')).toContainText('2026_용석핑.hwp');
+  fs.rmSync(dl, { recursive: true, force: true });
+});
+
 test('설정 화면과 콘솔 오류 없음', async () => {
   await win.getByTestId('open-settings').click();
   await expect(win.locator('.page-title')).toHaveText('설정');
   await win.getByTestId('nav-dashboard').click();
-  await expect(win.getByTestId('dash-rows').locator('.row:not(.skeleton)')).toHaveCount(9, { timeout: 20000 });
+  await expect(win.getByTestId('dash-rows').locator('.row:not(.skeleton)')).toHaveCount(10, { timeout: 20000 });
   await shot('08-dashboard-after');
   expect(errors).toEqual([]);
 });

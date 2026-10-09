@@ -1,6 +1,6 @@
 'use strict';
 // 화면에 노출하는 API. 정해진 채널만 호출·구독할 수 있다.
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const INVOKE = [
   'app:info', 'app:openExternal', 'settings:get', 'settings:set',
@@ -12,6 +12,7 @@ const INVOKE = [
   'updates:check', 'updates:run',
   'uninstall:open',
   'cdrive:status', 'cdrive:scan', 'cdrive:stop', 'cdrive:results', 'cdrive:move', 'cdrive:remove', 'cdrive:emptyRecycle', 'cdrive:openRecycle', 'cdrive:undo', 'cdrive:openFolder', 'cdrive:reveal', 'cdrive:prefs',
+  'filenames:scan', 'filenames:apply', 'filenames:undo', 'filenames:lastUndo', 'filenames:reveal', 'filenames:pickFolder',
   'desktop:status', 'desktop:plan', 'desktop:apply', 'desktop:undo', 'desktop:history', 'desktop:openArchive',
   'browser:scan', 'browser:defaultBrowser', 'browser:makeChromeDefault', 'browser:openDefaultApps', 'browser:fix', 'browser:undo', 'browser:reset', 'browser:running', 'browser:close', 'browser:sizes', 'browser:clean',
   'app:copy', 'app:paste',
@@ -24,6 +25,10 @@ contextBridge.exposeInMainWorld('sen', {
   invoke(channel, arg) {
     if (!INVOKE.includes(channel)) return Promise.reject(new Error('blocked channel'));
     return ipcRenderer.invoke(channel, arg);
+  },
+  // 끌어다 놓은 파일·폴더의 위치(Electron 32부터 File.path 대신)
+  pathsOf(files) {
+    try { return [...files].map((f) => webUtils.getPathForFile(f)).filter(Boolean); } catch { return []; }
   },
   on(channel, fn) {
     if (!EVENTS.includes(channel)) return () => {};

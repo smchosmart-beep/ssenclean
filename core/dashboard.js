@@ -1,7 +1,7 @@
 'use strict';
 // 대시보드 카드. 각 항목을 따로 점검해서 끝나는 대로 화면에 채운다. spec 3장
 // 화면 순서 = 사이드바 메뉴 순서(고정)
-const ITEMS = ['privacy', 'fonts', 'password', 'screensaver', 'updates', 'cdrive', 'browser', 'desktop', 'network'];
+const ITEMS = ['privacy', 'fonts', 'password', 'screensaver', 'updates', 'cdrive', 'browser', 'desktop', 'filenames', 'network'];
 const gb = (n) => `${(n / 1024 ** 3).toFixed(n < 10 * 1024 ** 3 ? 1 : 0)}GB`;
 
 function fmtDate(t) { const d = new Date(t); return `${d.getMonth() + 1}월 ${d.getDate()}일`; }
@@ -94,6 +94,13 @@ function createDashboard(s) {
       if (d.level === 'danger') return card('cdrive', 'danger', `C드라이브가 거의 꽉 찼어요 (${gb(d.free)} 남음)`, '꽉 차면 PC가 느려져요. 큰 동영상·설치파일을 정리하세요.', go);
       if (d.level === 'warn') return card('cdrive', 'warn', `C드라이브 남은 공간이 적어요 (${gb(d.free)} 남음)`, '더 차기 전에 큰 동영상·설치파일을 정리하세요.', go);
       return card('cdrive', 'ok', 'C드라이브 - 공간이 넉넉해요', left, { ...go, label: '자세히', icon: 'search' });
+    },
+    async filenames() {
+      const q = s.filenames.quickCount();
+      const go = { kind: 'navigate', target: 'filenames', label: '정리하기', icon: 'rename', autostart: true };
+      if (q.warn) return card('filenames', 'danger', `문서로 위장한 실행 파일 ${q.warn}개가 있어요`, '이름은 문서 같지만 실행 파일이에요. 열지 말고 확인하세요.', { ...go, label: '확인하기', icon: 'warn' });
+      if (q.fix) return card('filenames', 'warn', `파일명 정리 - 깨지거나 문제 있는 이름 ${q.fix}개`, '바탕화면·다운로드의 깨진 한글·특수문자·겹친 확장자를 한 번에 고쳐요.', go);
+      return card('filenames', 'ok', '파일명 정리 - 깨진 이름이 없어요', '바탕화면·다운로드 파일 이름이 깔끔해요.', { ...go, label: '자세히', icon: 'search' });
     },
     async desktop() {
       const q = s.desktop.quickStatus();

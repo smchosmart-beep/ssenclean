@@ -12,6 +12,7 @@ import updates from './views/updates.js';
 import cdrive from './views/cdrive.js';
 import desktop from './views/desktop.js';
 import browser from './views/browser.js';
+import filenames from './views/filenames.js';
 import settings from './views/settings.js';
 import network from './views/network.js';
 
@@ -25,6 +26,7 @@ const MENUS = [
   { id: 'cdrive', label: 'C드라이브 정리', icon: 'disk', view: cdrive },
   { id: 'browser', label: '브라우저 청소', icon: 'globe', view: browser },
   { id: 'desktop', label: '바탕화면 정리', icon: 'folder', view: desktop },
+  { id: 'filenames', label: '파일명 정리', icon: 'rename', view: filenames },
   { id: 'network', label: 'IP 주소', icon: 'network', view: network },
 ];
 const HIDDEN = { settings: { id: 'settings', view: settings }, uninstall: { id: 'cdrive', view: cdrive } };
